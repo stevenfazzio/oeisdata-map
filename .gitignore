@@ -1,0 +1,18 @@
+# Upstream sequence data (sparse-checkout via scripts/sync_seq.sh)
+seq/
+.cache/
+
+# Pipeline outputs
+data/
+logs/
+
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Env / OS
+.env
+.DS_Store
