@@ -26,9 +26,10 @@ else
     git -C "$CLONE_DIR" pull --ff-only
 fi
 
-if [ ! -e "$SEQ_LINK" ]; then
-    ln -s "$CLONE_DIR/seq" "$SEQ_LINK"
-    echo "Linked $SEQ_LINK -> $CLONE_DIR/seq"
+if [ ! -L "$SEQ_LINK" ] && [ ! -e "$SEQ_LINK" ]; then
+    # Use a path relative to the repo root so the link survives directory renames.
+    (cd "$REPO_ROOT" && ln -s ".cache/oeisdata-upstream/seq" "seq")
+    echo "Linked $SEQ_LINK -> .cache/oeisdata-upstream/seq"
 elif [ -L "$SEQ_LINK" ]; then
     echo "Symlink $SEQ_LINK already in place."
 else
