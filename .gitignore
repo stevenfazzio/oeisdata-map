@@ -1,5 +1,6 @@
 # Upstream sequence data (sparse-checkout via scripts/sync_seq.sh)
-seq/
+# `seq` matches both a directory and a symlink (which is what sync_seq.sh creates).
+seq
 .cache/
 
 # Pipeline outputs
