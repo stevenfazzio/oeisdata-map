@@ -324,6 +324,9 @@
 
 <!-- SECTION: js -->
 <script>
+// Stub plausible() so the panel works whether or not analytics is loaded.
+window.plausible = window.plausible || function() {};
+
 (function() {
   const FILTER_CONFIG = __FILTER_CONFIG_JSON__;
 
@@ -463,6 +466,7 @@
         document.getElementById('filter-container').classList.toggle('open');
         icon.innerHTML = body.classList.contains('open') ? '&#9662;' : '&#9656;';
         if (body.classList.contains('open')) {
+          plausible('Filter Panel Opened');
           this.updateFilterBodyHeight();
         }
         this.serializeState();
@@ -653,6 +657,7 @@
       const self = this;
       colorSelector.handleColorMapSelection = function(field) {
         origHandler(field);
+        plausible('Colormap Change',{props:{colormap:field.description||field}});
         self.onColormapChanged(field);
         self.serializeState();
       };
@@ -908,6 +913,7 @@
     }
 
     resetAll() {
+      plausible('Filter Reset');
       for (const [filterId, f] of Object.entries(this.filters)) {
         if (f.type === 'range') {
           f.minInput.value = f.min;
@@ -1027,6 +1033,7 @@
     }
 
     toggle.addEventListener('change', () => {
+      plausible('Toggle Labels');
       setLabelVisible(toggle.checked);
       if (filterPanel) filterPanel.serializeState();
     });

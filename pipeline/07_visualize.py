@@ -60,6 +60,17 @@ from config import (
 
 FILTER_PANEL_HTML = Path(__file__).resolve().parent / "filter_panel.html"
 
+PLAUSIBLE_SNIPPET = (
+    "<!-- Privacy-friendly analytics by Plausible -->\n"
+    '<script async src="https://plausible.io/js/pa-7v5A3XLnVN_I4MctSW8vr.js"></script>\n'
+    "<script>\n"
+    "  window.plausible=window.plausible||function()"
+    "{(plausible.q=plausible.q||[]).push(arguments)},"
+    "plausible.init=plausible.init||function(i){plausible.o=i||{}};\n"
+    "  plausible.init()\n"
+    "</script>"
+)
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 # The 4 stage-03 LLM columns. If any are missing, stage 07 falls back to
@@ -687,7 +698,9 @@ def main() -> None:
         hover_text_html_template=hover_html,
         marker_size_array=marker_sizes,
         extra_point_data=extra_data,
-        on_click="window.open(`https://oeis.org/{id}`,'_blank')",
+        on_click=(
+            "plausible('Sequence Click',{{props:{{sequence:`{id}`}}}});window.open(`https://oeis.org/{id}`,'_blank')"
+        ),
         colormap_rawdata=colormap_rawdata,
         colormap_metadata=colormap_metadata,
         title="A Semantic Map of the OEIS",
@@ -872,8 +885,8 @@ def _inject_filters(html_path: Path, filter_config: dict) -> None:
     for i in range(1, len(sections), 2):
         section_map[sections[i]] = sections[i + 1].strip()
 
-    # 3. Inject CSS before </head>.
-    html = html.replace("</head>", section_map["css"] + "\n</head>", 1)
+    # 3. Inject CSS + Plausible analytics snippet before </head>.
+    html = html.replace("</head>", section_map["css"] + "\n" + PLAUSIBLE_SNIPPET + "\n</head>", 1)
 
     # 4. Splice HTML in after the search-container div (matches HF map layout).
     search_pattern = re.compile(
