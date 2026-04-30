@@ -36,7 +36,6 @@ Design decisions:
 from __future__ import annotations
 
 import re
-import shutil
 from html import escape
 
 import datamapplot
@@ -183,6 +182,62 @@ def _bucketize_authors(values: np.ndarray, top_n: int = _AUTHOR_TOP_N) -> np.nda
     counts = counts.drop(labels=[""], errors="ignore")
     keep = set(counts.head(top_n).index)
     return np.array([(v if v in keep else _AUTHOR_OTHER_LABEL) for v in values])
+
+
+# ── Site-nav injection (Visualization ↔ Methodology) ────────────────────────
+# Injected only into the GitHub Pages copies (docs/index.html, docs/full.html),
+# not into data/oeis_map.html — methodology.html lives alongside the docs/
+# pages and the local artifact is single-page anyway. Keeping the nav out of
+# the DataMapPlot template means future DataMapPlot upgrades don't have to be
+# audited for nav-template breakage.
+
+# Plain string (not str.format) — CSS braces don't survive format placeholders.
+_SITE_NAV_HTML = """\
+<style>
+.site-nav{position:fixed;top:0;left:0;right:0;z-index:200;
+  background:rgba(255,255,255,0.85);backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);border-bottom:1px solid #e0e0e0;
+  padding:0 24px;height:44px;display:flex;align-items:center;gap:24px;
+  font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:14px;font-weight:500;pointer-events:auto;}
+.site-nav a{color:#333;text-decoration:none;transition:color 0.15s;}
+.site-nav a:hover{color:#0d9488;}
+.site-nav a.active{color:#0d9488;border-bottom:2px solid #0d9488;line-height:42px;}
+/* Push the DataMapPlot title and search box below the nav bar so they don't
+   overlap the translucent strip. The other corners (top-right / bottom-*) are
+   far enough away that they don't need adjustment. */
+.stack.top-left{margin-top:44px;}
+</style>
+<nav class="site-nav">
+  <a href="index.html"__VIS_ACTIVE__>Visualization</a>
+  <a href="methodology.html"__METH_ACTIVE__>Methodology</a>
+</nav>
+"""
+
+
+def _inject_site_nav(html: str, active: str) -> str:
+    """Insert the Visualization/Methodology nav block immediately after <body>.
+
+    `active` is "vis" or "meth" — chooses which link gets the .active class.
+    No-op (with a warning) if <body> is not found in the rendered HTML, since
+    DataMapPlot output is expected to contain it.
+    """
+    nav = _SITE_NAV_HTML.replace("__VIS_ACTIVE__", ' class="active"' if active == "vis" else "").replace(
+        "__METH_ACTIVE__", ' class="active"' if active == "meth" else ""
+    )
+    new_html, n_subs = re.subn(r"<body>", "<body>" + nav, html, count=1)
+    if n_subs == 0:
+        print("  WARNING: <body> tag not found; site-nav not injected")
+        return html
+    return new_html
+
+
+def _publish_with_nav(src_html_path, dest_html_path) -> None:
+    """Copy the rendered map to the docs/ output and inject the site-nav."""
+    html = src_html_path.read_text(encoding="utf-8")
+    html = _inject_site_nav(html, active="vis")
+    tmp = dest_html_path.with_suffix(dest_html_path.suffix + ".tmp")
+    tmp.write_text(html, encoding="utf-8")
+    tmp.replace(dest_html_path)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -587,8 +642,8 @@ def main() -> None:
     # scope is a local smoke-test and also publishes to index.html so
     # `make v0` still produces a viewable artifact for development.
     docs_out = DOCS_FULL_HTML if SCOPE == "all" else DOCS_INDEX_HTML
-    print(f"Copying to {docs_out.relative_to(docs_out.parent.parent)}…")
-    shutil.copy2(OEIS_MAP_HTML, docs_out)
+    print(f"Publishing to {docs_out.relative_to(docs_out.parent.parent)} with site-nav…")
+    _publish_with_nav(OEIS_MAP_HTML, docs_out)
     print(f"  → {docs_out}")
 
     print("\nDone.")
