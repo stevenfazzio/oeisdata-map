@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta property="og:title" content="About | A Semantic Map of the OEIS">
+<meta property="og:description" content="About the Semantic Map of the OEIS: how it was built, what's on it, and how to use it.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://stevenfazzio.github.io/oeisdata-map/about.html">
+<title>About | A Semantic Map of the OEIS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=IBM+Plex+Serif:wght@700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: #000;
+  background: #fff;
+  line-height: 1.7;
+  font-size: 16px;
+}
+.site-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  background: rgba(255,255,255,0.85); backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid #e0e0e0;
+  padding: 0 24px; height: 44px; display: flex; align-items: center; gap: 24px;
+  font-size: 14px; font-weight: 500; pointer-events: auto;
+}
+.site-nav a { color: #333; text-decoration: none; transition: color 0.15s; }
+.site-nav a:hover { color: #0d9488; }
+.site-nav a.active { color: #0d9488; border-bottom: 2px solid #0d9488; line-height: 42px; }
+.content { max-width: 720px; margin: 0 auto; padding: 68px 24px 80px; counter-reset: section; }
+h1, h2 { font-family: 'IBM Plex Serif', Georgia, serif; }
+h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.subtitle { color: #555; font-size: 16px; margin-bottom: 12px; }
+.data-date { color: #777; font-size: 14px; margin-bottom: 40px; }
+h2 {
+  font-size: 20px; font-weight: 700; margin-top: 48px; margin-bottom: 16px;
+  padding-bottom: 6px; border-bottom: 1px solid #e0e0e0; scroll-margin-top: 72px;
+}
+h2::before { counter-increment: section; content: "\A7" counter(section) "\A0"; color: #0d9488; font-weight: 500; }
+h2 .anchor { color: #0d9488; text-decoration: none; opacity: 0; margin-left: 6px; font-weight: 400; font-size: 0.85em; transition: opacity 0.15s; }
+h2:hover .anchor { opacity: 1; }
+h2 .anchor:hover { text-decoration: underline; }
+p { margin-bottom: 16px; }
+a { color: #0d9488; text-decoration: none; }
+a:hover { text-decoration: underline; }
+ul, ol { margin-bottom: 16px; padding-left: 24px; }
+li { margin-bottom: 6px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 15px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e0e0e0; vertical-align: top; }
+th { font-weight: 500; color: #555; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+code { font-size: 14px; background: #f0fdfa; color: #134e4a; padding: 2px 6px; border-radius: 3px; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.note { background: #f8f9fa; border-left: 3px solid #0d9488; padding: 12px 16px; margin: 16px 0; font-size: 14px; color: #333; }
+.toc { margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid #e0e0e0; }
+.toc ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.toc li { margin: 0; }
+.toc a { font-size: 14px; font-weight: 500; color: #555; text-decoration: none; transition: color 0.15s; }
+.toc a:hover { color: #0d9488; text-decoration: none; }
+.toc a.active { color: #0d9488; }
+.equation {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 14px; background: #f8f9fa; border: 1px solid #e0e0e0;
+  border-radius: 6px; padding: 14px 18px; margin: 16px 0;
+  text-align: center; line-height: 1.5;
+}
+.signal-table td:first-child { white-space: nowrap; }
+.signal-table td:first-child code { white-space: nowrap; }
+@media (max-width: 600px) {
+  table { font-size: 14px; }
+}
+@media (min-width: 1100px) {
+  .content { margin-left: calc(50% - 260px); margin-right: auto; }
+  .toc { position: fixed; top: 68px; left: calc(50% - 444px); width: 160px; border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+  .toc ul { display: block; }
+  .toc li { margin-bottom: 12px; }
+  .toc a { display: block; padding-left: 12px; border-left: 2px solid transparent; line-height: 1.4; }
+  .toc a.active { color: #0d9488; border-left-color: #0d9488; background: #f0fdfa; border-radius: 0 4px 4px 0; }
+}
+</style>
+</head>
+<body>
+<nav class="site-nav">
+  <a href="index.html">Visualization</a>
+  <a href="about.html" class="active">About</a>
+</nav>
+<div class="content">
+
+<h1>About</h1>
+<p class="subtitle">How the Semantic Map of the OEIS works</p>
+<p class="data-date">Data as of April 2026</p>
+
+<nav class="toc">
+  <ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#which-sequences">Which sequences are on the map</a></li>
+    <li><a href="#positioning">How sequences are positioned</a></li>
+    <li><a href="#cluster-labels">What the cluster labels mean</a></li>
+    <li><a href="#tags">Per-sequence tags</a></li>
+    <li><a href="#using-the-visualization">Using the visualization</a></li>
+    <li><a href="#field-definitions">What each colormap means</a></li>
+    <li><a href="#limitations">Limitations</a></li>
+    <li><a href="#credits">Credits</a></li>
+  </ul>
+</nav>
+
+<h2 id="overview">Overview <a href="#overview" class="anchor">#</a></h2>
+<p>
+  This is a 2D map of 25,000 entries from the
+  <a href="https://oeis.org">Online Encyclopedia of Integer Sequences</a>.
+  Sequences with similar descriptive text appear near each other, and
+  named themes (recurrence sequences, prime factorization, triangular arrays,
+  and so on) are surfaced as cluster labels at multiple zoom levels.
+</p>
+<p>
+  The encyclopedia itself contains roughly 394,000 sequences as of April
+  2026. The map shows a 25,000-entry subset chosen for documentation richness.
+  The rest of this page describes how the subset was selected, how the
+  positions and labels were generated, and what the various colormaps in the
+  visualization mean.
+</p>
+
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:24px auto 40px;max-width:380px;width:100%;font-family:'IBM Plex Sans',system-ui,sans-serif" aria-label="Pipeline flow diagram">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/>
+    </marker>
+    <style>
+      .box { fill: #f0fdfa; stroke: #0d9488; stroke-width: 1.5; rx: 8; }
+      .box-label { fill: #134e4a; font-size: 12px; font-weight: 500; text-anchor: middle; dominant-baseline: central; }
+      .connector { stroke: #0d9488; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+      .line { stroke: #0d9488; stroke-width: 1.5; fill: none; }
+    </style>
+  </defs>
+
+  <rect class="box" x="100" y="10" width="200" height="38"/>
+  <text class="box-label" x="200" y="29">394k OEIS sequences</text>
+
+  <line class="connector" x1="200" y1="48" x2="200" y2="67"/>
+
+  <rect class="box" x="120" y="72" width="160" height="38"/>
+  <text class="box-label" x="200" y="91">Curated 25k</text>
+
+  <path class="connector" d="M170,110 L80,128"/>
+  <path class="connector" d="M230,110 L320,128"/>
+
+  <rect class="box" x="10" y="130" width="140" height="38"/>
+  <text class="box-label" x="80" y="149">LLM Tag (4 axes)</text>
+
+  <rect class="box" x="250" y="130" width="140" height="38"/>
+  <text class="box-label" x="320" y="149">Embed (512D)</text>
+
+  <line class="connector" x1="320" y1="168" x2="320" y2="187"/>
+
+  <rect class="box" x="250" y="192" width="140" height="38"/>
+  <text class="box-label" x="320" y="211">UMAP &rarr; 2D</text>
+
+  <line class="connector" x1="320" y1="230" x2="320" y2="249"/>
+
+  <rect class="box" x="250" y="254" width="140" height="38"/>
+  <text class="box-label" x="320" y="273">Cluster &amp; Label</text>
+
+  <line class="line" x1="80" y1="168" x2="80" y2="325"/>
+  <line class="line" x1="320" y1="292" x2="320" y2="325"/>
+
+  <path class="connector" d="M80,325 L155,348"/>
+  <path class="connector" d="M320,325 L245,348"/>
+
+  <rect class="box" x="110" y="355" width="180" height="38"/>
+  <text class="box-label" x="200" y="374">Interactive Map</text>
+</svg>
+
+<h2 id="which-sequences">Which sequences are on the map <a href="#which-sequences" class="anchor">#</a></h2>
+<p>
+  The OEIS contains everything from foundational sequences (Fibonacci, primes,
+  Catalan numbers) to one-off submissions someone discovered last week. We
+  wanted a map that surfaces well-documented and well-attended-to sequences
+  without drowning in the long tail. The 25,000 selected sequences come from
+  combining two ideas:
+</p>
+
+<p>
+  <strong>Seed: editor-curated favorites.</strong> About 6,900 sequences carry
+  the OEIS keywords <code>core</code> ("foundational") or <code>nice</code>
+  ("exceptionally good"), assigned by editors to flag entries they think
+  people should know about. All of these are included.
+</p>
+
+<p>
+  <strong>Topup: highest-quality scored remainder.</strong> The other ~18,100
+  are picked from the remaining ~387,000 by ranking on a composite quality
+  score:
+</p>
+
+<div class="equation">
+score = log1p(edit_count)<br>
+&nbsp;&nbsp;+ 1.0 &middot; log1p(len(comments))<br>
+&nbsp;&nbsp;+ 0.5 &middot; log1p(len(formulas))<br>
+&nbsp;&nbsp;+ 0.5 &middot; log1p(len(examples))<br>
+&nbsp;&nbsp;+ 0.5 &middot; len(code_languages)<br>
+&nbsp;&nbsp;+ 0.3 &middot; log1p(n_references)
+</div>
+
+<p>What each signal is, and why it's a quality signal:</p>
+
+<table class="signal-table">
+  <thead>
+    <tr><th>Signal</th><th>What it measures</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>edit_count</code></td>
+      <td>Number of revisions the OEIS entry has accumulated. A sequence that gets repeatedly edited is one the community keeps returning to. Sustained edits are the closest thing the OEIS has to "this entry has owners."</td>
+    </tr>
+    <tr>
+      <td><code>len(comments)</code></td>
+      <td>Total characters in the prose comments section. Long comments mean a contributor took time to explain related results, alternative formulations, or historical context.</td>
+    </tr>
+    <tr>
+      <td><code>len(formulas)</code></td>
+      <td>Total characters in the formulas section. Multiple formulas typically come from multiple contributors, each having derived or restated the sequence in their preferred form.</td>
+    </tr>
+    <tr>
+      <td><code>len(examples)</code></td>
+      <td>Total characters in worked-example text. Examples are effort someone put in to make the sequence concrete and understandable.</td>
+    </tr>
+    <tr>
+      <td><code>len(code_languages)</code></td>
+      <td>Number of distinct programming languages with a contributed implementation (Maple, Mathematica, PARI, Python, Haskell, and so on). Independent reimplementations across languages mean the sequence interested people in several different communities. Genuinely strong signal.</td>
+    </tr>
+    <tr>
+      <td><code>n_references</code></td>
+      <td>Count of book and paper citations associated with the entry. Academic footprint.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  The weights came from an empirical calibration, not just guesswork. We had a
+  labeled negative class of about 2,400 programmatically-generated
+  cellular-automaton bulk submissions: sequences uploaded en masse by an
+  automated tool, which look superficially well-formed (they have comments,
+  references, links) but are exactly the kind of entry the map shouldn't be
+  cluttered with. We computed each signal's <abbr title="Area Under the ROC Curve">AUC</abbr>
+  at separating bulk from non-bulk and weighted accordingly.
+</p>
+
+<p>Two signals turned out to be misleading and were excluded:</p>
+<ul>
+  <li>
+    <strong>Hyperlink count</strong> (the number of <code>%H</code> entries)
+    actually scored HIGHER for bulk submissions than for genuine sequences.
+    Bulk uploads bundle templated links to the same handful of resources
+    (Wolfram MathWorld, b-files, OEIS index pages); including this signal
+    would have promoted bulk content rather than filtering it.
+  </li>
+  <li>
+    <strong>Has-code (binary).</strong> A simple "is there any implementation
+    at all?" flag was nearly random for separating bulk from non-bulk.
+    Replacing it with the COUNT of distinct languages made it useful: any
+    one implementation is weak, but three or four independent
+    implementations in different languages is robust evidence of interest.
+  </li>
+</ul>
+
+<h2 id="positioning">How sequences are positioned <a href="#positioning" class="anchor">#</a></h2>
+<p>
+  Each sequence is encoded as a 512-dimensional vector by Cohere's
+  <a href="https://docs.cohere.com/reference/embed">embed-v4.0</a> model. The
+  vectors are then projected to 2D with
+  <a href="https://github.com/lmcinnes/umap">UMAP</a>, and the 2D position is
+  what determines where each dot lands on the map.
+</p>
+
+<p>The text fed to the encoder for each sequence concatenates:</p>
+<ul>
+  <li>The sequence name</li>
+  <li>The first ~15 leading numerical values</li>
+  <li>The full comments section</li>
+  <li>The first formula</li>
+  <li>The worked-example text</li>
+  <li>Editorial OEIS keywords like <code>core</code>, <code>nice</code>, <code>easy</code>, <code>hard</code></li>
+</ul>
+
+<p>
+  Most of the geometric work is done by the prose channels. For sequences
+  with concept-bearing names like "Chebyshev polynomials of the first kind"
+  or "Hexagonal pyramidal numbers", the conceptual tokens in the name and
+  comments dominate placement: Cohere has seen these terms in lots of
+  pretraining data and groups them coherently. For the few hundred famous
+  sequences (Fibonacci, primes, Catalan, factorials), the leading-values
+  prefix also acts as a uniquely-identifying signature, since something like
+  <code>0, 1, 1, 2, 3, 5, 8, 13, 21</code> appears verbatim in many Fibonacci-related
+  contexts in Cohere's training corpus. For the long tail of obscure sequences
+  whose specific value prefixes Cohere hasn't memorized, the values channel
+  is mostly opaque integers, and placement comes from whatever conceptual
+  scaffolding the comments provide.
+</p>
+
+<p>
+  Some content keywords (<code>tabl</code>, <code>mult</code>, <code>sign</code>,
+  and so on, describing what kind of sequence this is) are deliberately
+  withheld from the embedded text, so they can serve as an independent signal
+  for evaluating embedding quality. Editorial keywords that reflect editorial
+  attention rather than mathematical content are kept.
+</p>
+
+<div class="note">
+  We also experimented with retrofitting the embeddings against the OEIS
+  <code>%Y</code> cross-reference graph (Faruqui et al., NAACL 2015,
+  Laplacian smoothing). Once the embed text included worked examples, the
+  smoothing traded content structure for graph-reconstruction fidelity
+  without producing visibly better cluster names, so the published map is
+  built from raw Cohere embeddings.
+</div>
+
+<h2 id="cluster-labels">What the cluster labels mean <a href="#cluster-labels" class="anchor">#</a></h2>
+<p>
+  The cluster labels overlaid on the map come from
+  <a href="https://github.com/TutteInstitute/toponymy">Toponymy</a>, a
+  hierarchical density-based clustering library. It groups dots by local
+  density and asks Claude Sonnet 4.5 to invent a human-readable name for
+  each cluster from a few representative sequences.
+</p>
+<p>
+  The result is a five-level hierarchy: at the broadest level there are 8
+  themes (recurrence sequences, prime factorization, triangular arrays, and
+  so on); at the finest level there are 597 specific sub-themes. Different
+  levels surface as you zoom in or out. About a third of sequences land in
+  regions Toponymy can't find a clean theme for; those show up as
+  <em>Unlabelled</em>.
+</p>
+
+<h2 id="tags">Per-sequence tags <a href="#tags" class="anchor">#</a></h2>
+<p>
+  Beyond the spatial position and the cluster names, each sequence is tagged
+  with four classification axes generated by Claude Sonnet 4.5 reading the
+  OEIS entry text:
+</p>
+<ul>
+  <li><strong>Math domain</strong> (12 values): number theory, combinatorics, analysis, algebra, graph theory, geometry, discrete dynamics, recreational, computer science, physics &amp; chemistry, probability &amp; stochastic, other.</li>
+  <li><strong>Sequence type</strong> (9 values): what each term <code>a(n)</code> structurally represents (enumeration, arithmetic function, recurrence, closed form, constant digits, table flattened, characteristic, ranked list, other).</li>
+  <li><strong>Growth class</strong> (9 values): how fast the sequence grows (finite, bounded, linear, polynomial, exponential, factorial-or-faster, logarithmic-or-subpoly, oscillating, unknown).</li>
+  <li><strong>Origin era</strong> (5 values): when the underlying mathematical concept was first studied (classical pre-1900, early 20th century, mid 20th century, modern post-2000, unknown). This is the era of the idea, not the date the OEIS entry was created.</li>
+</ul>
+
+<p>
+  These tags appear in the hover card, are searchable, and drive most of the
+  colormaps. They're LLM-generated without human review, so they can be wrong
+  (see <a href="#limitations">Limitations</a>).
+</p>
+
+<h2 id="using-the-visualization">Using the visualization <a href="#using-the-visualization" class="anchor">#</a></h2>
+<ul>
+  <li><strong>Pan and zoom:</strong> click and drag to pan, scroll to zoom.</li>
+  <li><strong>Hover:</strong> see a card with id, edit count, reference count, name, leading formula, first values, author, and the LLM-extracted math domain, sequence type, and growth class.</li>
+  <li><strong>Click:</strong> opens the sequence on oeis.org in a new tab.</li>
+  <li><strong>Search:</strong> find sequences by id (e.g. <code>A000045</code>), name (e.g. <code>Fibonacci</code>), author, or any keyword that appears in the first 400 characters of comments.</li>
+  <li><strong>Colormaps:</strong> the dropdown at lower-left switches the dot coloring between primary keyword, author, the four LLM tag axes, edit count, and reference count.</li>
+  <li><strong>Marker size:</strong> bigger dots have higher edit count (a rough proxy for editorial attention). Famous sequences like Fibonacci and the primes are the largest dots on the map.</li>
+</ul>
+
+<h2 id="field-definitions">What each colormap means <a href="#field-definitions" class="anchor">#</a></h2>
+<table>
+  <thead>
+    <tr><th>Colormap</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Primary keyword</td>
+      <td>One label per sequence chosen from its OEIS keyword set by precedence: <code>core</code> &gt; <code>nice</code> &gt; <code>easy</code> &gt; <code>hard</code> &gt; <code>tabl</code> &gt; <code>cons</code> &gt; <code>base</code>, with <code>other</code> as the fallback. Sequences carry many keywords on average; the precedence collapses each row to its highest-signal label so the colormap stays legible.</td>
+    </tr>
+    <tr>
+      <td>Author</td>
+      <td>The primary author of the OEIS entry. Bucketed to the top 10 most-prolific contributors plus "Other" for legibility.</td>
+    </tr>
+    <tr>
+      <td>Math domain (LLM)</td>
+      <td>The single most-fitting mathematical area. The most populated buckets in the curated set are number theory and combinatorics.</td>
+    </tr>
+    <tr>
+      <td>Sequence type (LLM)</td>
+      <td>What each term structurally represents.</td>
+    </tr>
+    <tr>
+      <td>Growth class (LLM)</td>
+      <td>Asymptotic growth rate, classified from the leading values and the formula. Ranked-list sequences (the n-th prime, the n-th squarefree integer) are classified by how the n-th element grows, not by how its index counts; the n-th prime is logarithmic-or-subpoly (it grows like n log n), not polynomial.</td>
+    </tr>
+    <tr>
+      <td>Origin era (LLM)</td>
+      <td>When the underlying concept was first studied. The model uses the sequence name, comments, and author together; classical-pre1900 wins whenever the sequence is named after a pre-1900 mathematician or refers to an ancient object, regardless of when the OEIS entry was added.</td>
+    </tr>
+    <tr>
+      <td>Edit count (log10)</td>
+      <td>Base-10 logarithm of the OEIS entry's revision count. Log scale spreads out the long tail.</td>
+    </tr>
+    <tr>
+      <td>References (log10 + 1)</td>
+      <td>Base-10 logarithm of (1 + number of book and paper citations).</td>
+    </tr>
+    <tr>
+      <td>Topic layers</td>
+      <td>Five hierarchical layers of cluster names (8 / 16 / 49 / 173 / 597 unique labels, coarsest first). Cluster labels appear directly on the map and adapt to the current zoom level.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="limitations">Limitations <a href="#limitations" class="anchor">#</a></h2>
+<p>
+  This is one map of the OEIS, not the only possible one. As with any map,
+  <a href="https://en.wikipedia.org/wiki/Map%E2%80%93territory_relation">the
+  map is not the territory</a>: it's a projection shaped by specific choices
+  about what to measure and how to render the result. To paraphrase
+  <a href="https://en.wikipedia.org/wiki/All_models_are_wrong">George Box</a>:
+  all models are wrong, but some are useful. I think this map is useful, but
+  it's worth understanding where it falls short.
+</p>
+
+<ul>
+  <li>
+    <strong>Cohere is not math-tuned.</strong> The encoder was trained on
+    general web and document text. It's good at coarse semantic similarity
+    (it can tell that two number-theory entries are about number theory) but
+    it has no special understanding of mathematical structure. A sequence
+    whose prose is generic and whose values aren't in the well-known canon
+    can land somewhere odd. A math-aware encoder would likely sharpen the
+    geometry meaningfully.
+  </li>
+  <li>
+    <strong>The numerical values themselves aren't embedded.</strong> Only
+    the textual rendering of the first ~15 leading terms participates in the
+    encoding. The full value lists, b-files, and any numerical structure
+    beyond what the prose describes are invisible to the layout.
+  </li>
+  <li>
+    <strong>The 25k filter excludes most of the OEIS.</strong> The score
+    over-represents sequences that have attracted editorial attention. A
+    mathematically interesting but sparsely-documented sequence will be
+    excluded; conversely a heavily-edited but niche entry can be included.
+  </li>
+  <li>
+    <strong>UMAP artifacts.</strong> Projecting 512 dimensions onto 2
+    inevitably loses information. Nearby points genuinely have similar
+    embeddings, and the relative positions of clusters are broadly meaningful,
+    but inter-cluster distances should not be read as precise measurements
+    of dissimilarity.
+  </li>
+  <li>
+    <strong>LLM-generated tags can be wrong.</strong> The four classification
+    axes and the cluster names are produced by Sonnet without human review.
+    Some real distinctions (specific sequence families, particular author
+    lineages, sub-genres of recreational mathematics) are not captured by
+    any field.
+  </li>
+  <li>
+    <strong>Point in time.</strong> The OEIS adds and edits sequences daily;
+    this map is a snapshot. There is no incremental-update mechanism, so
+    refreshing requires a full re-run.
+  </li>
+  <li>
+    <strong>Proprietary tooling.</strong> There is some irony in using
+    closed-source models (Cohere's embedder and Anthropic's Claude) to map
+    one of the longest-running open mathematical resources on the internet.
+    These were chosen for quality and convenience but they mean the pipeline
+    can't be fully reproduced without commercial-API access, and the
+    embedding and labeling behavior is opaque.
+  </li>
+</ul>
+
+<h2 id="credits">Credits <a href="#credits" class="anchor">#</a></h2>
+<p>
+  Sequence data is from the <a href="https://oeis.org">OEIS Foundation</a>
+  and the thousands of contributors whose work fills the encyclopedia.
+  Embeddings are from <a href="https://cohere.com">Cohere</a>; LLM tagging
+  and cluster naming use <a href="https://www.anthropic.com">Anthropic Claude
+  Sonnet 4.5</a>. The pipeline depends on open-source tools from the
+  <a href="https://github.com/TutteInstitute">Tutte Institute for Mathematics
+  and Computing</a>: <a href="https://github.com/lmcinnes/umap">UMAP</a> for
+  dimensionality reduction,
+  <a href="https://github.com/TutteInstitute/toponymy">Toponymy</a> for
+  hierarchical topic labeling, and
+  <a href="https://github.com/TutteInstitute/datamapplot">DataMapPlot</a> for
+  interactive map rendering.
+</p>
+
+<ul>
+  <li><strong>Author:</strong> <a href="https://github.com/stevenfazzio">Steven Fazzio</a></li>
+  <li><strong>Source code:</strong> <a href="https://github.com/stevenfazzio/oeisdata-map">stevenfazzio/oeisdata-map</a></li>
+  <li><strong>Sister projects:</strong>
+    <a href="https://github.com/stevenfazzio/semantic-github-map">semantic-github-map</a>
+    (top 10k starred GitHub repositories) and
+    <a href="https://github.com/stevenfazzio/huggingface-dataset-map">huggingface-dataset-map</a>
+    (top 5k liked HuggingFace datasets).</li>
+  <li><strong>Feedback:</strong> bug reports welcome. Please <a href="https://github.com/stevenfazzio/oeisdata-map/issues">open an issue</a>.</li>
+  <li><strong>License:</strong> pipeline code is MIT-licensed; sequence data is governed by the upstream OEIS license bundled in the source repository's <code>LICENSE</code> file.</li>
+</ul>
+
+</div>
+
+<script>
+(function() {
+  var tocLinks = document.querySelectorAll('.toc a');
+  var sections = [];
+  tocLinks.forEach(function(link) {
+    var id = link.getAttribute('href').slice(1);
+    var el = document.getElementById(id);
+    if (el) sections.push({ id: id, el: el, link: link });
+  });
+  var debounceTimer;
+  window.addEventListener('scroll', function() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(function() {
+      var current = '';
+      for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.getBoundingClientRect().top < 100) current = sections[i].id;
+      }
+      tocLinks.forEach(function(link) {
+        link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+      });
+    }, 50);
+  }, { passive: true });
+  tocLinks.forEach(function(link) {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      var id = this.getAttribute('href').slice(1);
+      var target = document.getElementById(id);
+      if (target) {
+        var top = target.getBoundingClientRect().top + window.pageYOffset - 68;
+        window.scrollTo({ top: top, behavior: 'smooth' });
+        history.pushState(null, '', '#' + id);
+      }
+    });
+  });
+  if (window.location.hash) {
+    var id = window.location.hash.slice(1);
+    var target = document.getElementById(id);
+    if (target) {
+      setTimeout(function() {
+        var top = target.getBoundingClientRect().top + window.pageYOffset - 68;
+        window.scrollTo({ top: top, behavior: 'smooth' });
+      }, 0);
+    }
+  }
+})();
+</script>
+</body>
+</html>

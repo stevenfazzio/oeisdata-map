@@ -184,11 +184,11 @@ def _bucketize_authors(values: np.ndarray, top_n: int = _AUTHOR_TOP_N) -> np.nda
     return np.array([(v if v in keep else _AUTHOR_OTHER_LABEL) for v in values])
 
 
-# ── Site-nav injection (Visualization ↔ Methodology) ────────────────────────
+# ── Site-nav injection (Visualization ↔ About) ──────────────────────────────
 # Injected only into the GitHub Pages copies (docs/index.html, docs/full.html),
-# not into data/oeis_map.html — methodology.html lives alongside the docs/
-# pages and the local artifact is single-page anyway. Keeping the nav out of
-# the DataMapPlot template means future DataMapPlot upgrades don't have to be
+# not into data/oeis_map.html — about.html lives alongside the docs/ pages and
+# the local artifact is single-page anyway. Keeping the nav out of the
+# DataMapPlot template means future DataMapPlot upgrades don't have to be
 # audited for nav-template breakage.
 
 # Plain string (not str.format) — CSS braces don't survive format placeholders.
@@ -209,20 +209,20 @@ _SITE_NAV_HTML = """\
 </style>
 <nav class="site-nav">
   <a href="index.html"__VIS_ACTIVE__>Visualization</a>
-  <a href="methodology.html"__METH_ACTIVE__>Methodology</a>
+  <a href="about.html"__ABOUT_ACTIVE__>About</a>
 </nav>
 """
 
 
 def _inject_site_nav(html: str, active: str) -> str:
-    """Insert the Visualization/Methodology nav block immediately after <body>.
+    """Insert the Visualization/About nav block immediately after <body>.
 
-    `active` is "vis" or "meth" — chooses which link gets the .active class.
+    `active` is "vis" or "about" — chooses which link gets the .active class.
     No-op (with a warning) if <body> is not found in the rendered HTML, since
     DataMapPlot output is expected to contain it.
     """
     nav = _SITE_NAV_HTML.replace("__VIS_ACTIVE__", ' class="active"' if active == "vis" else "").replace(
-        "__METH_ACTIVE__", ' class="active"' if active == "meth" else ""
+        "__ABOUT_ACTIVE__", ' class="active"' if active == "about" else ""
     )
     new_html, n_subs = re.subn(r"<body>", "<body>" + nav, html, count=1)
     if n_subs == 0:
