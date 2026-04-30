@@ -1,14 +1,14 @@
 """Render the OEIS interactive map with DataMapPlot.
 
-Minimal UI (colormap dropdown + hover + click-through, no filter panel).
-The full filter UI is deferred to Sprint 6 alongside a redesigned stage 03
-enrichment prompt.
+Colormap dropdown + hover + click-through + Advanced Filters panel
+(categorical multi-selects + numeric range sliders, with URL state).
 
 Reads:
 - ``data/enriched.parquet``     — id, name, comments, values_preview_str,
-                                  edit_count, n_references, keywords list,
-                                  and optionally math_domain / sequence_type /
-                                  growth_class / origin_era (from stage 03).
+                                  edit_count, n_references, n_links,
+                                  last_edited, keywords list, and optionally
+                                  math_domain / sequence_type / growth_class /
+                                  origin_era (from stage 03).
 - ``data/umap_coords.npz``      — float32 (N, 2) under key ``coords``
 - ``data/labels.parquet``       — id + label_layer_*
 
@@ -18,9 +18,9 @@ Writes:
 
 **LLM-column handling:** if ``enriched.parquet`` is missing any of the 4
 stage 03 LLM columns (math_domain / sequence_type / growth_class /
-origin_era), the map still renders — just with fewer colormaps and a
-simpler hover template. This lets the ``OEIS_SKIP_ENRICH=1`` pathway
-work at any scope without crashing.
+origin_era), the map still renders — just with fewer colormaps and the
+filter panel skips those four category sections. This lets the
+``OEIS_SKIP_ENRICH=1`` pathway work at any scope without crashing.
 
 Design decisions:
 - Marker size: ``sqrt(edit_count)`` linearly scaled to [3, 15] px
@@ -31,12 +31,18 @@ Design decisions:
 - The four LLM enums require stage 03; without enrichment the menu
   collapses to author + the two continuous colormaps.
 - Click handler: opens https://oeis.org/{id} in a new tab.
+- Filter panel: legend-clicks on categorical colormaps (Domain / Type /
+  Growth / Era / Author) sync with the corresponding filter checkboxes.
+  Range sliders cap at p99 to keep the meaningful range visible despite
+  long tails (e.g., max edit_count is 2,514 but p99 is ~282).
 """
 
 from __future__ import annotations
 
+import json
 import re
 from html import escape
+from pathlib import Path
 
 import datamapplot
 import glasbey
@@ -51,6 +57,8 @@ from config import (
     SCOPE,
     UMAP_COORDS_NPZ,
 )
+
+FILTER_PANEL_HTML = Path(__file__).resolve().parent / "filter_panel.html"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -412,6 +420,21 @@ def main() -> None:
 
     keywords_str = [_format_keywords(kws) for kws in df["keywords"]]
 
+    # Filter-panel arrays. The `*_filter` columns hold plain (un-escaped) values
+    # that the JS reads from `hoverData[field]` to drive checkbox/range filters
+    # and to keep legend-clicks in sync with checkbox state. Hover-card columns
+    # remain HTML-escaped above; the filter columns parallel them.
+    edits_int = df["edit_count"].fillna(0).astype(int).to_numpy()
+    refs_int = df["n_references"].fillna(0).astype(int).to_numpy()
+    links_int = df["n_links"].fillna(0).astype(int).to_numpy()
+    # Null last_edited (~4% of curated rows) → year 0, which falls below any
+    # slider range. Default state is "no filter applied" so nulls are visible
+    # initially; touching the year slider excludes them, which matches the
+    # semantic of "I want sequences edited in window X" (we don't know for nulls).
+    year_int = pd.to_datetime(df["last_edited"], errors="coerce").dt.year.fillna(0).astype(int).to_numpy()
+    keyword_universe = sorted({str(k) for kws in df["keywords"] if kws is not None for k in kws if k})
+    keywords_pipe = ["|".join(str(k) for k in (kws if kws is not None else []) if k) for kws in df["keywords"]]
+
     extra_data_dict = {
         "id": _esc(df["id"]),
         "name": _esc(df["name"]),
@@ -421,6 +444,13 @@ def main() -> None:
         "n_references": df["n_references"].fillna(0).astype(int).astype(str).tolist(),
         "author": _esc(author_clean_vals),
         "keywords": _esc(keywords_str),
+        # Plain-text filter columns (JS Number()-parses range columns).
+        "author_filter": author_bucketed.tolist(),
+        "keywords_filter": keywords_pipe,
+        "edits_filter": edits_int.astype(str).tolist(),
+        "refs_filter": refs_int.astype(str).tolist(),
+        "links_filter": links_int.astype(str).tolist(),
+        "year_filter": year_int.astype(str).tolist(),
     }
     if has_llm:
         extra_data_dict["math_domain"] = _esc(md_vals)
@@ -430,9 +460,12 @@ def main() -> None:
         extra_data_dict["math_domain_color"] = [
             _darken_for_pill(md_colors.get(v or "unknown", "#5a5a5a")) for v in md_vals
         ]
-        extra_data_dict["math_domain_bg"] = [
-            _pill_bg(md_colors.get(v or "unknown", "#5a5a5a")) for v in md_vals
-        ]
+        extra_data_dict["math_domain_bg"] = [_pill_bg(md_colors.get(v or "unknown", "#5a5a5a")) for v in md_vals]
+        # Plain-text LLM-enum filter columns (parallel the colormap rawdata).
+        extra_data_dict["domain_filter"] = md_vals.tolist()
+        extra_data_dict["type_filter"] = st_vals.tolist()
+        extra_data_dict["growth_filter"] = gc_vals.tolist()
+        extra_data_dict["era_filter"] = oe_vals.tolist()
     extra_data = pd.DataFrame(extra_data_dict)
 
     # ── Marker sizes (sqrt of edit_count, normalized to [3, 15]) ─────────────
@@ -671,6 +704,25 @@ def main() -> None:
     size_kb = OEIS_MAP_HTML.stat().st_size / 1_000
     print(f"  → {OEIS_MAP_HTML} ({size_kb:.0f} KB)")
 
+    print("Injecting Advanced Filters panel…")
+    filter_config = _build_filter_config(
+        n_rows=len(df),
+        has_llm=has_llm,
+        md_vals=md_vals if has_llm else None,
+        st_vals=st_vals if has_llm else None,
+        gc_vals=gc_vals if has_llm else None,
+        oe_vals=oe_vals if has_llm else None,
+        author_bucketed=author_bucketed,
+        keyword_universe=keyword_universe,
+        edits_int=edits_int,
+        refs_int=refs_int,
+        links_int=links_int,
+        year_int=year_int,
+    )
+    _inject_filters(OEIS_MAP_HTML, filter_config)
+    size_kb = OEIS_MAP_HTML.stat().st_size / 1_000
+    print(f"  → {OEIS_MAP_HTML} ({size_kb:.0f} KB after injection)")
+
     # Publish under scope-specific name: curated is the headline map at
     # docs/index.html; full scope ships alongside at docs/full.html. core
     # scope is a local smoke-test and also publishes to index.html so
@@ -681,6 +733,170 @@ def main() -> None:
     print(f"  → {docs_out}")
 
     print("\nDone.")
+
+
+# ── Advanced Filters injection ──────────────────────────────────────────────
+
+# Tail labels are pinned to the end of the checkbox list so "unknown" / "Other"
+# don't visually dominate the alphabetic head.
+_TAIL_LABELS = ("unknown", "Unknown", "other", "Other")
+
+
+def _sorted_with_tail(values) -> list[str]:
+    """Unique values, alphabetic, with tail labels (unknown/Other) pinned last."""
+    uniques = sorted({str(v) for v in values})
+    head = [v for v in uniques if v not in _TAIL_LABELS]
+    tail = [v for v in uniques if v in _TAIL_LABELS]
+    tail.sort(key=lambda v: _TAIL_LABELS.index(v))
+    return head + tail
+
+
+def _p99_cap(arr: np.ndarray) -> int:
+    """99th-percentile cap for slider max so the long tail doesn't compress
+    the meaningful range. Values above the cap fold into the '+' indicator."""
+    return int(np.percentile(arr, 99))
+
+
+def _build_filter_config(
+    *,
+    n_rows: int,
+    has_llm: bool,
+    md_vals,
+    st_vals,
+    gc_vals,
+    oe_vals,
+    author_bucketed: np.ndarray,
+    keyword_universe: list[str],
+    edits_int: np.ndarray,
+    refs_int: np.ndarray,
+    links_int: np.ndarray,
+    year_int: np.ndarray,
+) -> dict:
+    """Build the JSON config consumed by filter_panel.html JS."""
+    # Year minimum: ignore the 0 sentinel for missing dates, otherwise the
+    # slider would start at 0 and squash the meaningful 2000-onwards range.
+    nonzero_years = year_int[year_int > 0]
+    year_min = int(nonzero_years.min()) if nonzero_years.size else 2000
+    year_max = int(year_int.max()) if year_int.size else 2026
+
+    cfg: dict = {
+        "totalCount": int(n_rows),
+        "authors": _sorted_with_tail(author_bucketed),
+        "keywords": list(keyword_universe),
+        "domains": [],
+        "types": [],
+        "growths": [],
+        "eras": [],
+        "ranges": {
+            "edits": {
+                "min": int(edits_int.min()),
+                "max": int(edits_int.max()),
+                "sliderMax": _p99_cap(edits_int),
+            },
+            "refs": {
+                "min": int(refs_int.min()),
+                "max": int(refs_int.max()),
+                "sliderMax": _p99_cap(refs_int),
+            },
+            "links": {
+                "min": int(links_int.min()),
+                "max": int(links_int.max()),
+                "sliderMax": _p99_cap(links_int),
+            },
+            "year": {
+                "min": year_min,
+                "max": year_max,
+                "sliderMax": year_max,
+            },
+        },
+        "colormapFieldToFilterId": {
+            "author": "filter-author",
+        },
+        "filterIdToColormapField": {
+            "filter-author": "author",
+        },
+    }
+
+    if has_llm:
+        cfg["domains"] = _sorted_with_tail(md_vals)
+        cfg["types"] = _sorted_with_tail(st_vals)
+        cfg["growths"] = _sorted_with_tail(gc_vals)
+        cfg["eras"] = _sorted_with_tail(oe_vals)
+        cfg["colormapFieldToFilterId"].update(
+            {
+                "math_domain": "filter-domain",
+                "sequence_type": "filter-type",
+                "growth_class": "filter-growth",
+                "origin_era": "filter-era",
+            }
+        )
+        cfg["filterIdToColormapField"].update(
+            {
+                "filter-domain": "math_domain",
+                "filter-type": "sequence_type",
+                "filter-growth": "growth_class",
+                "filter-era": "origin_era",
+            }
+        )
+
+    return cfg
+
+
+def _inject_filters(html_path: Path, filter_config: dict) -> None:
+    """Splice the Advanced Filters CSS / HTML / JS into a DataMapPlot output.
+
+    Steps mirror the sister ``huggingface-dataset-map`` injection so future
+    DataMapPlot upgrades only need to be tested in one place:
+      1. Dispatch a ``datamapReady`` event after metadata loads, so the JS
+         can attach to the live ``datamap`` and ``hoverData`` references.
+      2. Splice the panel's CSS before ``</head>``.
+      3. Splice the panel's HTML next to the search box (top-left stack).
+      4. Splice the panel's JS before ``</html>``, with the live filter
+         config injected as JSON.
+    """
+    html = html_path.read_text(encoding="utf-8")
+
+    # 1. Dispatch datamapReady once metadata is loaded, before checkAllDataLoaded.
+    html = re.sub(
+        r"(updateProgressBar\('meta-data-progress', 100\);\s*)(checkAllDataLoaded\(\);)",
+        r"\1window.dispatchEvent(new CustomEvent('datamapReady', "
+        r"{ detail: { datamap, hoverData } }));\n          \2",
+        html,
+        count=1,
+    )
+
+    # 2. Read the panel template and split by section markers.
+    template = FILTER_PANEL_HTML.read_text(encoding="utf-8")
+    sections = re.split(r"<!-- SECTION: (\w+) -->", template)
+    section_map = {}
+    for i in range(1, len(sections), 2):
+        section_map[sections[i]] = sections[i + 1].strip()
+
+    # 3. Inject CSS before </head>.
+    html = html.replace("</head>", section_map["css"] + "\n</head>", 1)
+
+    # 4. Splice HTML in after the search-container div (matches HF map layout).
+    search_pattern = re.compile(
+        r'(<div id="search-container" class="container-box[^"]*">\s*'
+        r"<input[^/]*/>\s*</div>)"
+    )
+    match = search_pattern.search(html)
+    if match:
+        insert_pos = match.end()
+        html = html[:insert_pos] + "\n      " + section_map["html"] + "\n" + html[insert_pos:]
+    else:
+        # Fallback: inside .stack.top-left, before any other content.
+        html = html.replace(
+            '<div class="stack top-left">',
+            '<div class="stack top-left">\n      ' + section_map["html"],
+            1,
+        )
+
+    # 5. Inject JS (with config) before </html>.
+    js_section = section_map["js"].replace("__FILTER_CONFIG_JSON__", json.dumps(filter_config))
+    html = html.replace("</html>", js_section + "\n</html>", 1)
+
+    html_path.write_text(html, encoding="utf-8")
 
 
 if __name__ == "__main__":
