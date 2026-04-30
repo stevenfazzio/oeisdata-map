@@ -2,26 +2,47 @@
 
 Reads `data/enriched.parquet` and writes:
 
-- `data/embeddings.npz`        — float32 (N, 512) array under key `embeddings`
+- `data/embeddings.npz`        — float32 (N, 512) array under key `embeddings`,
+                                 plus a `text_version` string under that key
 - `data/embeddings_index.npy`  — string array of OEIS ids in the same row order
 
 The composite text per sequence (see `build_embed_text`) is:
 
     Name: <name>
-    Keywords: <comma-joined>
+    Keywords: <editorial keywords only, comma-joined>
     First values: <values_preview_str>
     Description:
     <comments truncated to MAX_COMMENT_CHARS>
     Formula: <formulas truncated to MAX_FORMULA_CHARS>
+    Examples:
+    <examples truncated to MAX_EXAMPLE_CHARS>
 
-The `First values` line is the killer signal — Cohere can recognize Fibonacci
-from `0, 1, 1, 2, 3, 5, 8…` directly even when the prose is generic.
+Two design choices the text composition rests on:
 
-**Resume:** if `embeddings.npz` + `embeddings_index.npy` already exist, only
-rows whose id is missing from the cached index get re-embedded; the rest are
-reused. The final output is always re-stitched to match the row order of
-`enriched.parquet` so downstream stages can rely on positional alignment with
-the parquet.
+- **Content keywords are removed.** OEIS keywords split into content
+  (``tabl``, ``mult``, ``sign``, …) and editorial (``nice``, ``easy``,
+  ``hard``). Content keywords are independently used as an embedding-quality
+  eval signal (stage 04b silhouette), so feeding them into the embedder
+  would make that eval circular: we'd be measuring whether Cohere copied
+  the literal token rather than whether it captured the property from
+  prose. See pipeline/keywords.py for the split.
+
+- **The `First values` line is the killer signal** — Cohere recognizes
+  Fibonacci from ``0, 1, 1, 2, 3, 5, 8…`` directly even when the prose is
+  generic.
+
+- **Examples** (``%e``) are content-rich and weren't previously embedded.
+  Often more discriminative than comments alone, especially for
+  combinatorial sequences whose worked examples reveal structure.
+
+**Resume:** if `embeddings.npz` + `embeddings_index.npy` already exist AND
+the cached `text_version` matches the current EMBED_TEXT_VERSION, only rows
+whose id is missing from the cached index get re-embedded; the rest are
+reused. If the version differs, the whole cache is invalidated and every
+row is re-embedded (since the meaning of every cached vector has changed).
+The final output is always re-stitched to match the row order of
+`enriched.parquet` so downstream stages can rely on positional alignment
+with the parquet.
 """
 
 from __future__ import annotations
@@ -41,23 +62,51 @@ from config import (
     EMBEDDINGS_NPZ,
     ENRICHED_PARQUET,
     MAX_COMMENT_CHARS,
+    MAX_EXAMPLE_CHARS,
     MAX_FORMULA_CHARS,
     MAX_NAME_CHARS,
 )
+from keywords import EMBED_TEXT_DROP
 from tqdm import tqdm
+
+# Bump this whenever build_embed_text's output changes. Cached embeddings
+# from an older version are invalidated automatically (see _load_existing).
+# v1: name + keywords (all) + values + comments + formula
+# v2: name + keywords (editorial only, content+universal dropped) + values
+#     + comments + formula + examples
+EMBED_TEXT_VERSION = "v2"
+
 
 # ── Embed text builder ───────────────────────────────────────────────────────
 
 
 def build_embed_text(row) -> str:
-    """Composite text per sequence; the values preview is the killer signal."""
+    """Composite text per sequence; values preview is the killer signal.
+
+    Content keywords are dropped (so the keyword-silhouette eval in stage
+    04b stays orthogonal to the embedding); editorial keywords (nice, easy,
+    hard, …) are kept since they reflect editorial attention not under
+    eval. Examples are included for sequences that have them.
+    """
     name = (row["name"] or "").strip()[:MAX_NAME_CHARS]
     comments = (row["comments"] or "")[:MAX_COMMENT_CHARS]
     formulas = (row["formulas"] or "")[:MAX_FORMULA_CHARS]
+    examples = (row["examples"] or "")[:MAX_EXAMPLE_CHARS]
     kw = row["keywords"]
-    keywords = ", ".join(list(kw) if kw is not None else [])
+    if kw is not None:
+        editorial_kws = [k for k in kw if str(k) not in EMBED_TEXT_DROP]
+    else:
+        editorial_kws = []
+    keywords = ", ".join(editorial_kws)
     values = row["values_preview_str"] or ""
-    return f"Name: {name}\nKeywords: {keywords}\nFirst values: {values}\nDescription:\n{comments}\nFormula: {formulas}"
+    return (
+        f"Name: {name}\n"
+        f"Keywords: {keywords}\n"
+        f"First values: {values}\n"
+        f"Description:\n{comments}\n"
+        f"Formula: {formulas}\n"
+        f"Examples:\n{examples}"
+    )
 
 
 # ── Cohere call with backoff ─────────────────────────────────────────────────
@@ -87,7 +136,7 @@ def _embed_batch(co: cohere.ClientV2, texts: list[str], *, retries: int = 5) -> 
 # ── Atomic .npz / .npy save helpers ──────────────────────────────────────────
 
 
-def _atomic_savez(path: Path, **arrays: np.ndarray) -> None:
+def _atomic_savez(path: Path, **arrays) -> None:
     """`np.savez` via temp+rename. Passes a file handle so numpy doesn't auto-append `.npz`."""
     tmp_path = path.with_name(path.name + ".tmp")
     with open(tmp_path, "wb") as f:
@@ -107,10 +156,25 @@ def _atomic_savenpy(path: Path, arr: np.ndarray) -> None:
 
 
 def _load_existing() -> dict[str, np.ndarray]:
-    """Return an `id → embedding` map for any previously cached embeddings (or empty)."""
+    """Return an `id → embedding` map for any previously cached embeddings (or empty).
+
+    The cache is invalidated (returns empty) when the stored ``text_version``
+    does not match the current ``EMBED_TEXT_VERSION`` — every cached vector
+    represents a different text composition and is no longer trustworthy.
+    """
     if not (EMBEDDINGS_NPZ.exists() and EMBEDDINGS_INDEX_NPY.exists()):
         return {}
-    prev_embs = np.load(EMBEDDINGS_NPZ)["embeddings"]
+    npz = np.load(EMBEDDINGS_NPZ, allow_pickle=False)
+    prev_embs = npz["embeddings"]
+    cached_version = (
+        str(npz["text_version"].item()) if "text_version" in npz.files else "v1"  # legacy: pre-versioning
+    )
+    if cached_version != EMBED_TEXT_VERSION:
+        print(
+            f"Cache invalidated: {EMBEDDINGS_NPZ.name} has text_version={cached_version!r}, "
+            f"current is {EMBED_TEXT_VERSION!r}. Re-embedding all rows."
+        )
+        return {}
     prev_ids = np.load(EMBEDDINGS_INDEX_NPY)
     if len(prev_embs) != len(prev_ids):
         raise SystemExit(
@@ -122,14 +186,21 @@ def _load_existing() -> dict[str, np.ndarray]:
 
 def _save_outputs(ordered_embs: np.ndarray, ordered_ids: list[str]) -> None:
     print(f"\nWriting {EMBEDDINGS_NPZ.name} ({ordered_embs.shape}, {ordered_embs.dtype})…")
-    _atomic_savez(EMBEDDINGS_NPZ, embeddings=ordered_embs)
+    _atomic_savez(
+        EMBEDDINGS_NPZ,
+        embeddings=ordered_embs,
+        text_version=np.asarray(EMBED_TEXT_VERSION),
+    )
 
     print(f"Writing {EMBEDDINGS_INDEX_NPY.name} ({len(ordered_ids):,} ids)…")
     _atomic_savenpy(EMBEDDINGS_INDEX_NPY, np.asarray(ordered_ids))
 
     npz_size = EMBEDDINGS_NPZ.stat().st_size / 1_000_000
     npy_size = EMBEDDINGS_INDEX_NPY.stat().st_size / 1_000_000
-    print(f"Done. {EMBEDDINGS_NPZ.name} ({npz_size:.2f} MB), {EMBEDDINGS_INDEX_NPY.name} ({npy_size:.2f} MB)")
+    print(
+        f"Done. {EMBEDDINGS_NPZ.name} ({npz_size:.2f} MB, text_version={EMBED_TEXT_VERSION!r}), "
+        f"{EMBEDDINGS_INDEX_NPY.name} ({npy_size:.2f} MB)"
+    )
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────

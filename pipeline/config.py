@@ -71,7 +71,10 @@ CO_API_KEY = os.environ.get("CO_API_KEY", "")
 # Haiku's ~$25, still well under the ~$100/run cap. See Sprint 6 plan in
 # ~/.claude/plans/swift-snacking-kite.md for the full eval data.
 ANTHROPIC_MODEL_ENRICH = "claude-sonnet-4-5"  # stage 03: classification (Sprint 6 onward)
-ANTHROPIC_MODEL_NAMER = "claude-sonnet-4-5"  # stage 06: Toponymy cluster naming
+# Stage 06 namer is overridable via env so experiments (e.g., α-grid comparison
+# at lower cost) can swap Sonnet → Haiku without editing code. Production
+# renders default to Sonnet.
+ANTHROPIC_MODEL_NAMER = os.environ.get("ANTHROPIC_MODEL_NAMER", "claude-sonnet-4-5")
 ANTHROPIC_CONCURRENCY = 30  # async semaphore size for stage 03
 ENRICH_BATCH_SIZE = 25  # sequences per tool-use call
 

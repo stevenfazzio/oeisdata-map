@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta property="og:title" content="Methodology &mdash; A Semantic Map of the OEIS">
-<meta property="og:description" content="How the Semantic Map of the OEIS is built: from sparse-checkout of oeis/oeisdata to interactive visualization, with %Y-edge retrofit.">
+<meta property="og:description" content="How the Semantic Map of the OEIS is built: from sparse-checkout of oeis/oeisdata to interactive visualization.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://stevenfazzio.github.io/oeisdata-map/methodology.html">
 <title>Methodology &mdash; A Semantic Map of the OEIS</title>
@@ -136,7 +136,6 @@ tr.param-group td { font-weight: 700; color: #0d9488; border-bottom: 2px solid #
     <li><a href="#overview">Overview</a></li>
     <li><a href="#corpus-collection">Corpus Collection</a></li>
     <li><a href="#processing-pipeline">Processing Pipeline</a></li>
-    <li><a href="#retrofit">Retrofit on Cross-References</a></li>
     <li><a href="#tools">Tools &amp; Technologies</a></li>
     <li><a href="#parameters">Notable Parameters</a></li>
     <li><a href="#prompt">Classification Prompt</a></li>
@@ -164,13 +163,12 @@ tr.param-group td { font-weight: 700; color: #0d9488; border-bottom: 2px solid #
   <a href="https://github.com/oeis/oeisdata"><code>oeis/oeisdata</code></a>
   repository, applies a quality filter to select the curated 25k subset,
   classifies each sequence into a 4-axis taxonomy with Claude Sonnet, embeds
-  each sequence's prose with Cohere, retrofits the embedding geometry against
-  the OEIS <code>%Y</code> cross-reference graph, projects to 2D with UMAP,
-  generates hierarchical topic labels with Toponymy, and renders an interactive
-  HTML map with DataMapPlot.
+  each sequence's prose with Cohere, projects to 2D with UMAP, generates
+  hierarchical topic labels with Toponymy, and renders an interactive HTML
+  map with DataMapPlot.
 </p>
 
-<svg viewBox="0 0 400 520" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:24px auto 40px;max-width:380px;width:100%;font-family:'IBM Plex Sans',system-ui,sans-serif" aria-label="Pipeline flow diagram">
+<svg viewBox="0 0 400 460" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:24px auto 40px;max-width:380px;width:100%;font-family:'IBM Plex Sans',system-ui,sans-serif" aria-label="Pipeline flow diagram">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/>
@@ -187,14 +185,12 @@ tr.param-group td { font-weight: 700; color: #0d9488; border-bottom: 2px solid #
   <rect class="box" x="100" y="10" width="200" height="38"/>
   <text class="box-label" x="200" y="29">394k OEIS .seq files</text>
 
-  <!-- arrow down to Parsed Records -->
   <line class="connector" x1="200" y1="48" x2="200" y2="67"/>
 
   <!-- Parsed Records -->
   <rect class="box" x="120" y="72" width="160" height="38"/>
   <text class="box-label" x="200" y="91">Parsed Records</text>
 
-  <!-- arrow down to Curated 25k -->
   <line class="connector" x1="200" y1="110" x2="200" y2="129"/>
 
   <!-- Curated 25k -->
@@ -213,33 +209,26 @@ tr.param-group td { font-weight: 700; color: #0d9488; border-bottom: 2px solid #
   <rect class="box" x="250" y="192" width="140" height="38"/>
   <text class="box-label" x="320" y="211">Embed (512D)</text>
 
-  <!-- Right column: Embed -> Retrofit -> UMAP -> Cluster & Label -->
   <line class="connector" x1="320" y1="230" x2="320" y2="249"/>
 
-  <rect class="box" x="240" y="254" width="160" height="38"/>
-  <text class="box-label" x="320" y="273">%Y-Edge Retrofit</text>
+  <rect class="box" x="250" y="254" width="140" height="38"/>
+  <text class="box-label" x="320" y="273">UMAP &rarr; 2D</text>
 
   <line class="connector" x1="320" y1="292" x2="320" y2="311"/>
 
   <rect class="box" x="250" y="316" width="140" height="38"/>
-  <text class="box-label" x="320" y="335">UMAP &rarr; 2D</text>
-
-  <line class="connector" x1="320" y1="354" x2="320" y2="373"/>
-
-  <rect class="box" x="250" y="378" width="140" height="38"/>
-  <text class="box-label" x="320" y="397">Cluster &amp; Label</text>
-
-  <!-- Vertical line down on the left to convergence (no arrow heads) -->
-  <line class="line" x1="80" y1="230" x2="80" y2="445"/>
-  <line class="line" x1="320" y1="416" x2="320" y2="445"/>
+  <text class="box-label" x="320" y="335">Cluster &amp; Label</text>
 
   <!-- Convergence: two arrows into Interactive Map -->
-  <path class="connector" d="M80,445 L155,468"/>
-  <path class="connector" d="M320,445 L245,468"/>
+  <line class="line" x1="80" y1="230" x2="80" y2="385"/>
+  <line class="line" x1="320" y1="354" x2="320" y2="385"/>
+
+  <path class="connector" d="M80,385 L155,408"/>
+  <path class="connector" d="M320,385 L245,408"/>
 
   <!-- Interactive Map -->
-  <rect class="box" x="110" y="475" width="180" height="38"/>
-  <text class="box-label" x="200" y="494">Interactive Map</text>
+  <rect class="box" x="110" y="415" width="180" height="38"/>
+  <text class="box-label" x="200" y="434">Interactive Map</text>
 </svg>
 
 <h2 id="corpus-collection">Corpus Collection <a href="#corpus-collection" class="anchor">#</a></h2>
@@ -250,8 +239,7 @@ tr.param-group td { font-weight: 700; color: #0d9488; border-bottom: 2px solid #
   file. The mirror has 394,561 sequences as of April 2026; the parser walks the
   full set in parallel and extracts the fields the pipeline cares about (name,
   comments, formulas, examples, leading values, keywords, author, last-edited
-  date, references, links, code-language tags, and the <code>%Y</code>
-  cross-reference list).
+  date, references, links, code-language tags).
 </p>
 <p>
   OEIS entries use a line-prefixed text format: <code>%I</code> for the header,
@@ -318,11 +306,7 @@ score = log1p(edit_count)<br>
   Long fields are clipped per character budget
   (<code>MAX_NAME_CHARS=300</code>, <code>MAX_COMMENT_CHARS=1500</code>,
   <code>MAX_FORMULA_CHARS=500</code>, <code>MAX_EXAMPLE_CHARS=300</code>) so a
-  single pathological entry can't dominate later stages. A separate sidecar
-  stage (<code>01b_parse_y_edges.py</code>) walks the same files just to
-  collect the <code>%Y</code> cross-reference edges into
-  <code>data/y_edges.parquet</code>; the main parser deliberately ignores
-  <code>%Y</code> so its output stays simple.</p>
+  single pathological entry can't dominate later stages.</p>
 </div>
 
 <div class="pipeline-step">
@@ -350,31 +334,32 @@ score = log1p(edit_count)<br>
   <strong>4. Embed</strong>
   <p>Encodes each sequence into a 512-dimensional unit vector using Cohere's
   <code>embed-v4.0</code> model with <code>input_type="clustering"</code>, in
-  batches of 96. The composite text per sequence concatenates the name,
-  keywords, the first ~15 numeric values, the comments, and the first formula.
-  The first-values line is the high-signal channel: Cohere can recognize
-  Fibonacci from <code>0, 1, 1, 2, 3, 5, 8&hellip;</code> directly, even when
-  the prose is generic. Resumable via a row-id index file
-  (<code>embeddings_index.npy</code>): re-running only embeds rows whose id
-  isn't already cached.</p>
-</div>
-
-<div class="pipeline-step">
-  <strong>4b. Retrofit on <code>%Y</code> edges</strong>
-  <p>Closed-form Laplacian smoothing of the Cohere vectors against the OEIS
-  <code>%Y</code> cross-reference graph (Faruqui et al., NAACL 2015). 10% of
-  edges are held out, a small grid of (&alpha;, n_iter) is searched, and the
-  point with the highest Hits@10 against the held-out edges is saved as
-  <code>data/embeddings_retrofit.npz</code>. See the
-  <a href="#retrofit">Retrofit</a> section below for the full method and
-  evaluation.</p>
+  batches of 96. The composite text per sequence concatenates the name, the
+  first ~15 numeric values, the comments, the first formula, the worked
+  examples, and the editorial OEIS keywords (<code>core</code>,
+  <code>nice</code>, <code>easy</code>, &hellip;). Content keywords like
+  <code>tabl</code>, <code>mult</code>, and <code>sign</code> are deliberately
+  withheld so they can serve as an independent eval signal (see
+  <a href="https://github.com/stevenfazzio/oeisdata-map/blob/main/pipeline/keywords.py">pipeline/keywords.py</a>
+  for the split). The first-values line is the high-signal channel: Cohere
+  recognizes Fibonacci from <code>0, 1, 1, 2, 3, 5, 8&hellip;</code> directly
+  even when the prose is generic. Resumable via a row-id index file plus a
+  text-version stamp inside the <code>.npz</code>: changing the embed-text
+  composition automatically invalidates the cache.</p>
+  <p style="margin-top: 8px; font-size: 14px; color: #555;">An earlier
+  experiment used Faruqui-style Laplacian smoothing on the OEIS <code>%Y</code>
+  cross-reference graph to retrofit the Cohere vectors, but the trade-off
+  destroyed content structure faster than it improved graph reconstruction
+  once the embed text included examples and dropped content keywords. The
+  smoothing code is preserved in <code>pipeline/04b_retrofit.py</code> as an
+  optional experiment, not part of the canonical pipeline.</p>
 </div>
 
 <div class="pipeline-step">
   <strong>5. Reduce to 2D</strong>
   <p>Applies UMAP (<code>n_neighbors=15</code>, <code>min_dist=0.05</code>,
   <code>metric="cosine"</code>, <code>random_state=42</code>) to project the
-  retrofit embeddings to 2D. Deterministic with a fixed random seed;
+  Cohere embeddings to 2D. Deterministic with a fixed random seed;
   re-running produces identical coordinates.</p>
 </div>
 
@@ -386,7 +371,7 @@ score = log1p(edit_count)<br>
   to generate human-readable cluster names at multiple levels of detail
   (<code>min_clusters=4</code>, <code>lowest_detail_level=0.5</code>,
   <code>highest_detail_level=1.0</code>). The current curated build produces
-  five label layers (7, 21, 66, 222, and 729 unique labels from coarsest to
+  five label layers (8, 16, 49, 173, and 597 unique labels from coarsest to
   finest). The per-sequence document fed to Toponymy is just the name, the
   values preview, and the first 200 characters of comments &mdash; it doesn't
   see the full record, only enough context to disambiguate the cluster's
@@ -403,103 +388,6 @@ score = log1p(edit_count)<br>
   <code>oeis.org/{id}</code> in a new tab.</p>
 </div>
 
-<h2 id="retrofit">Retrofit on Cross-References <a href="#retrofit" class="anchor">#</a></h2>
-<p>
-  Cohere's <code>embed-v4.0</code> is a general-purpose text encoder, trained
-  on web and document corpora. It does well on the prose surrounding a
-  sequence (the name, the comments, the formula) but it has no special
-  knowledge of OEIS-specific structure &mdash; in particular, it doesn't know
-  that two sequences are related when one's <code>%Y</code> field cross-references
-  the other.
-</p>
-<p>
-  Those <code>%Y</code> edges are a high-signal source: they're hand-curated by
-  OEIS contributors specifically to record &ldquo;these are related, look at
-  both.&rdquo; The retrofit stage uses them to pull cross-referenced sequences
-  toward each other in embedding space, without retraining the model and
-  without a GPU.
-</p>
-
-<h3>Method</h3>
-<p>
-  The smoother is a closed-form fixed-point iteration adapted from
-  <a href="https://aclanthology.org/N15-1184/">Faruqui et al. (NAACL 2015)</a>.
-  Let <code>Q&#x2080;</code> be the baseline Cohere matrix (one row per
-  sequence) and <code>A_norm</code> be the row-normalized adjacency of the
-  cross-reference graph. The retrofit iteration is:
-</p>
-<div class="equation">
-Q &larr; (1 &minus; &alpha;) &middot; Q&#x2080; &nbsp;+&nbsp; &alpha; &middot; (A_norm &middot; Q)
-</div>
-<p>
-  After <code>n_iter</code> iterations, rows are renormalized to unit length so
-  cosine similarity remains a clean dot product. Sequences with no
-  cross-references in the training graph are pinned to <code>Q&#x2080;</code>
-  and don't drift. <code>&alpha;</code> controls how much the baseline geometry
-  yields to the graph: 0 is pure baseline, 1 ignores the original embedding
-  entirely (the algorithm becomes label propagation).
-</p>
-
-<h3>Evaluation</h3>
-<p>
-  The 81,912 cross-reference edges within the curated 25k are split 90/10
-  (seed 42). The 90% split builds <code>A_norm</code>; the 10% split is held
-  out. For every held-out (source, target) pair, we rank all other 24,999
-  sequences by cosine similarity to the source and check where the target
-  lands. Both directions of each held-out edge are scored. Holdout pairs
-  where either endpoint is isolated in the training graph (no edges to learn
-  from) are dropped, leaving 15,594 directed eval pairs.
-</p>
-<p>
-  The grid is &alpha; &isin; {0.2, 0.4, 0.6, 0.8, 0.9, 1.0} &times;
-  <code>n_iter</code> &isin; {5, 10}. <code>n_iter</code> sensitivity is
-  empirically near-zero on this graph &mdash; 5 and 10 differ by under 0.001
-  Hits@10 at every &alpha; &mdash; so two points are enough to confirm
-  convergence. The winner is the (&alpha;, n_iter) pair with the highest
-  Hits@10.
-</p>
-
-<p><strong>Winner:</strong> &alpha; = 0.8, n_iter = 10.</p>
-
-<div class="metric-grid">
-  <div class="metric-card">
-    <div class="label">Hits@10</div>
-    <div class="baseline">0.200</div>
-    <div class="winner">0.255</div>
-    <div class="delta positive">+5.6 pts</div>
-  </div>
-  <div class="metric-card">
-    <div class="label">Hits@100</div>
-    <div class="baseline">0.369</div>
-    <div class="winner">0.535</div>
-    <div class="delta positive">+16.6 pts</div>
-  </div>
-  <div class="metric-card">
-    <div class="label">MRR</div>
-    <div class="baseline">0.104</div>
-    <div class="winner">0.093</div>
-    <div class="delta negative">-1.1 pts</div>
-  </div>
-</div>
-
-<p>
-  Hits@10 and Hits@100 jump substantially; MRR drops slightly. The pattern
-  makes sense: top-1 retrieval on this dataset is dominated by near-duplicate
-  prose (variant rows of the same family), and those near-duplicates are
-  already at rank 1 in the baseline. The retrofit moves <code>%Y</code> neighbors
-  &mdash; which encode the relations OEIS contributors explicitly chose to record
-  &mdash; into the rank 5&ndash;100 band, displacing some of the prose-near-duplicates
-  out of the top slot. Visually, this sharpens local cluster density: stage 06's
-  HDBSCAN-based clusterer is sensitive to that density, and the retrofit map
-  has visibly tighter clusters than the baseline-only map.
-</p>
-<p>
-  The retrofit is opt-in via the <code>OEIS_EMBEDDINGS_FILE</code> env var.
-  Downstream stages read whichever embedding file the variable points at, so
-  a single environment change toggles between the baseline and the retrofit
-  build.
-</p>
-
 <h2 id="tools">Tools &amp; Technologies <a href="#tools" class="anchor">#</a></h2>
 <table>
   <thead>
@@ -508,7 +396,6 @@ Q &larr; (1 &minus; &alpha;) &middot; Q&#x2080; &nbsp;+&nbsp; &alpha; &middot; (
   <tbody>
     <tr><td><a href="https://github.com/oeis/oeisdata"><code>oeis/oeisdata</code></a></td><td>Source of every <code>.seq</code> file (sparse checkout, no <code>files/</code> assets)</td></tr>
     <tr><td><a href="https://docs.cohere.com/reference/embed">Cohere <code>embed-v4.0</code></a></td><td>Sequence text embedding (512 dimensions)</td></tr>
-    <tr><td><a href="https://aclanthology.org/N15-1184/">Faruqui et al. retrofit</a></td><td>Laplacian smoothing of embeddings against the <code>%Y</code> graph</td></tr>
     <tr><td><a href="https://github.com/lmcinnes/umap">UMAP</a></td><td>Dimensionality reduction from 512D to 2D</td></tr>
     <tr><td><a href="https://github.com/TutteInstitute/toponymy">Toponymy</a></td><td>Hierarchical density-based topic labeling</td></tr>
     <tr><td><a href="https://github.com/TutteInstitute/datamapplot">DataMapPlot</a></td><td>Interactive HTML map rendering</td></tr>
@@ -546,14 +433,7 @@ Q &larr; (1 &minus; &alpha;) &middot; Q&#x2080; &nbsp;+&nbsp; &alpha; &middot; (
     <tr><td>Model</td><td>Cohere <code>embed-v4.0</code></td><td><code>input_type="clustering"</code></td></tr>
     <tr><td>Dimensions</td><td>512</td></tr>
     <tr><td>Batch size</td><td>96</td><td>Cohere API call</td></tr>
-    <tr class="param-group"><td colspan="3">Retrofit (stage 04b)</td></tr>
-    <tr><td>Holdout fraction</td><td>0.10</td><td>Of in-scope <code>%Y</code> edges</td></tr>
-    <tr><td>Random seed</td><td>42</td><td>For the train/holdout split</td></tr>
-    <tr><td>&alpha; grid</td><td>0.2, 0.4, 0.6, 0.8, 0.9, 1.0</td></tr>
-    <tr><td><code>n_iter</code> grid</td><td>5, 10</td></tr>
-    <tr><td>Winner selection</td><td>max Hits@10</td></tr>
-    <tr><td>Edges in scope (curated)</td><td>81,912</td><td>Out of 1.16M global <code>%Y</code> edges</td></tr>
-    <tr><td>Selected (&alpha;, n_iter)</td><td>(0.8, 10)</td><td>For the published map</td></tr>
+    <tr><td>Content keywords</td><td>excluded from embed text</td><td>So they remain an orthogonal eval signal</td></tr>
     <tr class="param-group"><td colspan="3">UMAP (stage 05)</td></tr>
     <tr><td><code>n_neighbors</code></td><td>15</td><td>Local neighborhood size</td></tr>
     <tr><td><code>min_dist</code></td><td>0.05</td><td>Controls cluster tightness</td></tr>
@@ -565,7 +445,7 @@ Q &larr; (1 &minus; &alpha;) &middot; Q&#x2080; &nbsp;+&nbsp; &alpha; &middot; (
     <tr><td>Detail levels</td><td>0.5&ndash;1.0</td></tr>
     <tr><td>Object description</td><td>"OEIS integer sequences"</td></tr>
     <tr><td>Corpus description</td><td>"selection of integer sequences from the Online Encyclopedia of Integer Sequences"</td></tr>
-    <tr><td>Layers (curated)</td><td>5</td><td>7 / 21 / 66 / 222 / 729 unique labels coarsest&rarr;finest</td></tr>
+    <tr><td>Layers (curated)</td><td>5</td><td>8 / 16 / 49 / 173 / 597 unique labels coarsest&rarr;finest</td></tr>
     <tr class="param-group"><td colspan="3">Visualization (stage 07)</td></tr>
     <tr><td>Marker size</td><td>sqrt(edit_count) &rarr; [3, 15] px</td><td>Linear stretch &mdash; high-edit sequences are the largest dots</td></tr>
     <tr><td>Author bucketing</td><td>Top 10 + "Other"</td><td>Top by per-author sequence count</td></tr>
@@ -731,8 +611,8 @@ Reasoning: a flattened triangular table of binomial coefficients; central column
   enums (math domain, sequence type, growth class, origin era), edit count
   (log scale), or reference count (log scale).</li>
   <li><strong>Topic labels:</strong> Cluster labels appear on the map at five
-  levels of detail, from broad themes (Combinatorial Structures, Prime Divisor
-  Functions, Polygonal Figurate Numbers, &hellip;) down to specific
+  levels of detail, from broad themes (recurrence sequences, prime
+  factorization, triangular arrays, &hellip;) down to specific
   sub-topics. Levels are chosen automatically by the labeling algorithm.</li>
   <li><strong>Marker size:</strong> Bigger dots mean higher edit count
   &mdash; a rough proxy for editorial attention. Famous sequences like
@@ -753,7 +633,7 @@ Reasoning: a flattened triangular table of binomial coefficients; central column
     <tr><td>Origin era (LLM)</td><td>When the underlying mathematical concept was first studied (NOT when the OEIS entry was created). Five values: <code>classical_pre1900</code>, <code>early_20c_1900_1950</code>, <code>mid_20c_1950_2000</code>, <code>modern_post2000</code>, <code>unknown</code>. The model uses the name, comments, author, and last-edited year together &mdash; classical-pre1900 wins whenever the sequence is named after a pre-1900 mathematician or refers to an ancient object, regardless of when the OEIS entry was added.</td></tr>
     <tr><td>Edit count (log10)</td><td>Base-10 logarithm of the OEIS entry's edit count (the <code>#NNN</code> revision number from the <code>%I</code> header). Log scale spreads out the long tail of low-edit entries while preserving differences among the most-attended-to sequences.</td></tr>
     <tr><td>References (log10 + 1)</td><td>Base-10 logarithm of (1 + the number of <code>%D</code> reference lines). <code>%D</code> entries are book/paper citations; the count is a rough proxy for academic attention.</td></tr>
-    <tr><td>Topic layers</td><td>Five hierarchical layers of cluster names from Toponymy + Claude Sonnet 4.5, coarsest first (7 / 21 / 66 / 222 / 729 unique labels). The coarsest layer surfaces themes like <em>Prime Divisor Functions</em>, <em>Combinatorial Structures</em>, <em>Polygonal Figurate Numbers</em>, <em>Binary Sequences</em>, <em>Fibonacci Triangles</em>, and <em>Lattice Paths Catalan</em>. Cluster labels appear directly on the map and adapt to the current zoom level.</td></tr>
+    <tr><td>Topic layers</td><td>Five hierarchical layers of cluster names from Toponymy + Claude Sonnet 4.5, coarsest first (8 / 16 / 49 / 173 / 597 unique labels). The coarsest layer surfaces themes like prime factorization, recurrence sequences, triangular arrays, and combinatorial generating functions. Cluster labels appear directly on the map and adapt to the current zoom level.</td></tr>
   </tbody>
 </table>
 
@@ -765,12 +645,8 @@ Reasoning: a flattened triangular table of binomial coefficients; central column
   map</a> was the first (top 10k starred repositories), and the
   <a href="https://github.com/stevenfazzio/huggingface-dataset-map">semantic HuggingFace
   dataset map</a> was the second (top 5k liked datasets). The OEIS map shares
-  most of the pipeline structure with both, but differs in two ways. First,
-  the corpus has a built-in graph (the <code>%Y</code> cross-references) that
-  encodes meaningful similarity between entries directly &mdash; a signal that
-  the GitHub and HuggingFace corpora don't have, and the reason the retrofit
-  stage exists in this pipeline but not in the others. Second, the LLM
-  classification taxonomy is mathematical rather than dataset- or
+  most of the pipeline structure with both; the main difference is that the
+  LLM classification taxonomy is mathematical rather than dataset- or
   repository-shaped: math domain, sequence type, growth class, origin era.
 </p>
 <p>
@@ -778,7 +654,7 @@ Reasoning: a flattened triangular table of binomial coefficients; central column
   <a href="https://lmcinnes.github.io/datamapplot_examples/arXiv/">ArXiv data
   map</a>, which embeds 2.4 million arXiv abstracts. The OEIS map is much
   smaller but takes the same approach &mdash; a single semantic 2D layout with
-  hierarchical cluster naming &mdash; and adds the retrofit step.
+  hierarchical cluster naming.
 </p>
 <p>
   More broadly, this project sits in a tradition of spatially mapping
@@ -806,8 +682,7 @@ Reasoning: a flattened triangular table of binomial coefficients; central column
   <a href="https://github.com/TutteInstitute/toponymy">Toponymy</a> for
   hierarchical topic labeling, and
   <a href="https://github.com/TutteInstitute/datamapplot">DataMapPlot</a> for
-  interactive map rendering. The retrofit method follows
-  <a href="https://aclanthology.org/N15-1184/">Faruqui et al. (NAACL 2015)</a>.
+  interactive map rendering.
 </p>
 
 <h2 id="limitations">Limitations <a href="#limitations" class="anchor">#</a></h2>
@@ -849,16 +724,7 @@ Reasoning: a flattened triangular table of binomial coefficients; central column
   systematically over-represents sequences that have attracted editorial
   attention and under-represents recent or obscure entries. A sequence that
   is mathematically interesting but documented sparsely will be excluded;
-  conversely, a heavily-edited but nicheentry will be included.</li>
-
-  <li><strong>The <code>%Y</code> retrofit assumes cross-references encode
-  semantic similarity.</strong> Often they do &mdash; OEIS contributors add
-  <code>%Y</code> links specifically to flag related sequences. But
-  <code>%Y</code> is a heterogeneous relation: sometimes it means "same family
-  read at a different offset" (very strong similarity), sometimes "appears in
-  the same theorem" (moderate), and sometimes "merely shares a few terms with"
-  (weak or spurious). The retrofit treats every edge equally, so the geometry
-  inherits whatever noise is in <code>%Y</code> as if it were signal.</li>
+  conversely, a heavily-edited but niche entry will be included.</li>
 
   <li><strong>Dimensionality reduction artifacts.</strong> UMAP does a good
   job preserving both local and global structure, but projecting 512

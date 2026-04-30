@@ -18,8 +18,18 @@ out 10% of edges for evaluation — Hits@10 / Hits@100 / MRR against baseline.
 
 Grid: α ∈ {0.2, 0.4, 0.6, 0.8, 0.9, 1.0} × n_iter ∈ {5, 10}. Winner = max Hits@10.
 
+**Multi-signal eval.** Three metrics report per grid point:
+  - Held-out %Y Hits@10 / Hits@100 / MRR — graph self-consistency
+    (training and eval use the same edge graph, just a 90/10 split).
+  - Content-keyword silhouette gap — intra-class minus inter-class mean
+    cosine similarity, averaged over OEIS content keywords (tabl, mult,
+    sign, …; see pipeline/keywords.py). This is independent of %Y because
+    keywords aren't in the embed text or the smoothing graph.
+The winner-selection rule is still max Hits@10 (no automatic multi-objective
+pick); the keyword gap is surfaced for inspection.
+
 Inputs:
-  - data/enriched.parquet       (id column → authoritative row order)
+  - data/enriched.parquet       (id + keywords; defines row order)
   - data/embeddings.npz         (baseline Q0, float32 (N, 512))
   - data/embeddings_index.npy   (must match enriched row order)
   - data/y_edges.parquet        (global edge list from stage 01b)
@@ -53,6 +63,7 @@ from config import (
     Y_EDGES_PARQUET,
     Y_EDGES_SPLIT_PARQUET,
 )
+from keywords import CONTENT_KEYWORDS
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -155,6 +166,100 @@ def retrofit(
 # ── Evaluation ───────────────────────────────────────────────────────────────
 
 
+def build_keyword_membership(keywords_series: pd.Series) -> dict[str, np.ndarray]:
+    """Map each content keyword to the int32 array of row indices having it.
+
+    Skips keywords with fewer than 2 members (no intra-class pair to score).
+    Skips keywords absent from CONTENT_KEYWORDS — only the orthogonal,
+    content-bearing keywords are useful as eval signal.
+    """
+    membership: dict[str, list[int]] = {kw: [] for kw in CONTENT_KEYWORDS}
+    for i, kws in enumerate(keywords_series):
+        if kws is None:
+            continue
+        try:
+            kw_set = {str(k) for k in kws}
+        except TypeError:
+            continue
+        for kw in kw_set & CONTENT_KEYWORDS:
+            membership[kw].append(i)
+    out: dict[str, np.ndarray] = {}
+    for kw, lst in membership.items():
+        if len(lst) >= 2:
+            out[kw] = np.asarray(lst, dtype=np.int32)
+    return out
+
+
+def eval_keyword_silhouette(
+    Q: np.ndarray,
+    keyword_to_indices: dict[str, np.ndarray],
+) -> dict:
+    """Per-keyword intra-class mean cosine similarity vs inter-class.
+
+    For unit-norm Q, intra/inter mean cosine reduce to closed-form sums of
+    the per-class centroid (sum of member rows). For class S with sum vector
+    M_S = sum_{i in S} Q[i], the mean intra-class cosine over distinct pairs
+    is (||M_S||^2 - |S|) / (|S| * (|S| - 1)) (because diagonal contributes
+    |S| from the unit norms). The mean inter-class cosine over all (in, out)
+    pairs is M_S · (M_total - M_S) / (|S| * (n - |S|)).
+
+    Returns:
+      summary  — n_keywords_evaluated, mean_intra, mean_inter, mean_gap
+                 (unweighted), weighted_gap (weighted by |S|).
+      per_keyword — list of {keyword, n, intra, inter, gap}, sorted by
+                    keyword name.
+
+    Q is assumed to be unit-norm (caller ensures this; baseline + retrofit
+    both renormalize at the end). Both means use the closed-form identities
+    above, so this is O(n*d + k*d) regardless of class size.
+    """
+    n = len(Q)
+    M_total = Q.sum(axis=0)
+
+    per_keyword: list[dict] = []
+    intra_sum = 0.0
+    inter_sum = 0.0
+    weighted_intra = 0.0
+    weighted_inter = 0.0
+    total_weight = 0
+
+    for kw in sorted(keyword_to_indices):
+        idx = keyword_to_indices[kw]
+        nk = int(len(idx))
+        if nk < 2 or nk >= n:
+            continue
+        M_k = Q[idx].sum(axis=0)
+        # Intra: closed form for unit-norm Q.
+        intra = (float(M_k @ M_k) - nk) / (nk * (nk - 1))
+        # Inter: dot of class sum with the rest of the corpus's sum.
+        inter = float(M_k @ (M_total - M_k)) / (nk * (n - nk))
+        gap = intra - inter
+        per_keyword.append(
+            {
+                "keyword": kw,
+                "n": nk,
+                "intra": intra,
+                "inter": inter,
+                "gap": gap,
+            }
+        )
+        intra_sum += intra
+        inter_sum += inter
+        weighted_intra += nk * intra
+        weighted_inter += nk * inter
+        total_weight += nk
+
+    n_kw = len(per_keyword)
+    summary = {
+        "n_keywords_evaluated": n_kw,
+        "mean_intra": intra_sum / n_kw if n_kw else 0.0,
+        "mean_inter": inter_sum / n_kw if n_kw else 0.0,
+        "mean_gap": (intra_sum - inter_sum) / n_kw if n_kw else 0.0,
+        "weighted_gap": (weighted_intra - weighted_inter) / total_weight if total_weight else 0.0,
+    }
+    return {"summary": summary, "per_keyword": per_keyword}
+
+
 def eval_hits(
     Q: np.ndarray,
     eval_pairs: np.ndarray,
@@ -211,15 +316,21 @@ def eval_hits(
 
 
 def main() -> None:
-    # 1. Load enriched row order.
+    # 1. Load enriched row order + keywords (for the silhouette eval).
     if not ENRICHED_PARQUET.exists():
         raise SystemExit(f"{ENRICHED_PARQUET} not found — run the baseline pipeline through stage 03 first")
     print(f"Reading {ENRICHED_PARQUET.name}…")
-    df = pd.read_parquet(ENRICHED_PARQUET, columns=["id"])
+    df = pd.read_parquet(ENRICHED_PARQUET, columns=["id", "keywords"])
     ids: list[str] = df["id"].tolist()
     n = len(ids)
     id_to_idx = {sid: i for i, sid in enumerate(ids)}
     print(f"  {n:,} in-scope sequences")
+
+    print("Building keyword membership for silhouette eval…")
+    keyword_membership = build_keyword_membership(df["keywords"])
+    print(f"  {len(keyword_membership)} content keywords with >=2 members:")
+    for kw in sorted(keyword_membership):
+        print(f"    {kw:8s} {len(keyword_membership[kw]):>5,} sequences")
 
     # 2. Load baseline embeddings and verify alignment.
     if not BASELINE_EMBEDDINGS_NPZ.exists():
@@ -309,12 +420,20 @@ def main() -> None:
     print("\nEvaluating baseline…")
     t0 = time.time()
     baseline_metrics = eval_hits(Q0, eval_pairs)
+    baseline_silhouette = eval_keyword_silhouette(Q0, keyword_membership)
     print(
         f"  baseline Hits@10={baseline_metrics['hits_at_10']:.4f}  "
         f"Hits@100={baseline_metrics['hits_at_100']:.4f}  "
         f"MRR={baseline_metrics['mrr']:.4f}  "
+        f"keyword_gap(weighted)={baseline_silhouette['summary']['weighted_gap']:.4f}  "
         f"({time.time() - t0:.1f}s)"
     )
+    print("  per-keyword baseline (intra - inter):")
+    for entry in baseline_silhouette["per_keyword"]:
+        print(
+            f"    {entry['keyword']:8s} n={entry['n']:>5,} "
+            f"intra={entry['intra']:.4f}  inter={entry['inter']:.4f}  gap={entry['gap']:+.4f}"
+        )
 
     # 8. Grid search. Keep only the current winner's Q in memory so we don't
     # balloon RAM at full scope (394k × 512 × 4B ≈ 800MB per candidate).
@@ -330,7 +449,10 @@ def main() -> None:
             t_fit = time.time() - t0
             t0 = time.time()
             metrics = eval_hits(Q, eval_pairs)
+            silhouette = eval_keyword_silhouette(Q, keyword_membership)
             t_eval = time.time() - t0
+            sil_summary = silhouette["summary"]
+            base_sil = baseline_silhouette["summary"]
             entry = {
                 "alpha": alpha,
                 "n_iter": n_iter,
@@ -340,6 +462,10 @@ def main() -> None:
                 "delta_hits_at_10": metrics["hits_at_10"] - baseline_metrics["hits_at_10"],
                 "delta_hits_at_100": metrics["hits_at_100"] - baseline_metrics["hits_at_100"],
                 "delta_mrr": metrics["mrr"] - baseline_metrics["mrr"],
+                "keyword_silhouette": sil_summary,
+                "delta_keyword_weighted_gap": sil_summary["weighted_gap"] - base_sil["weighted_gap"],
+                "delta_keyword_mean_gap": sil_summary["mean_gap"] - base_sil["mean_gap"],
+                "keyword_silhouette_per_keyword": silhouette["per_keyword"],
                 "seconds_fit": round(t_fit, 2),
                 "seconds_eval": round(t_eval, 2),
             }
@@ -350,6 +476,8 @@ def main() -> None:
                 f"Hits@100={metrics['hits_at_100']:.4f} "
                 f"(Δ{entry['delta_hits_at_100']:+.4f})  "
                 f"MRR={metrics['mrr']:.4f}  "
+                f"keyword_gap(w)={sil_summary['weighted_gap']:.4f} "
+                f"(Δ{entry['delta_keyword_weighted_gap']:+.4f})  "
                 f"[{t_fit:.1f}s fit, {t_eval:.1f}s eval]"
             )
 
@@ -385,6 +513,7 @@ def main() -> None:
         "n_holdout_edges": int(len(hold_edges)),
         "n_eval_pairs": int(len(eval_pairs)),
         "baseline": baseline_metrics,
+        "baseline_keyword_silhouette": baseline_silhouette,
         "grid": grid_results,
         "winner": best_entry,
     }

@@ -7,6 +7,9 @@ seq
 data/
 logs/
 
+# Comparison renders (eval/compare_alphas.py output; per-α variants of the map)
+docs/compare/
+
 # Python
 __pycache__/
 *.egg-info/

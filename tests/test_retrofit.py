@@ -27,6 +27,7 @@ _spec.loader.exec_module(retrofit_mod)
 
 build_adjacency = retrofit_mod.build_adjacency
 retrofit = retrofit_mod.retrofit
+eval_keyword_silhouette = retrofit_mod.eval_keyword_silhouette
 
 
 def _unit(v: np.ndarray) -> np.ndarray:
@@ -126,3 +127,84 @@ class TestBuildAdjacency:
         adj = build_adjacency(2, edges)
         dense = adj.toarray()
         assert np.allclose(dense, [[0.0, 1.0], [1.0, 0.0]])
+
+
+class TestKeywordSilhouette:
+    """Closed-form silhouette computation matches a brute-force pair-sum."""
+
+    @staticmethod
+    def _brute_force(Q, idx, all_idx):
+        """Mean intra-class and mean inter-class cosine, summed pairwise.
+
+        Q is unit-norm so cosine = dot. Used to verify the closed-form
+        identities in eval_keyword_silhouette.
+        """
+        in_set = set(idx.tolist())
+        intra_pairs = [(i, j) for i in idx for j in idx if i < j]
+        inter_pairs = [(i, j) for i in idx for j in all_idx if j not in in_set]
+        # Mean over UNORDERED intra pairs (each pair counted once); the
+        # closed-form uses ORDERED pairs (each counted twice) divided by
+        # nk*(nk-1), which is mathematically equal to the unordered mean.
+        intra_mean = np.mean([float(Q[i] @ Q[j]) for i, j in intra_pairs]) if intra_pairs else 0.0
+        inter_mean = np.mean([float(Q[i] @ Q[j]) for i, j in inter_pairs]) if inter_pairs else 0.0
+        return intra_mean, inter_mean
+
+    def test_closed_form_matches_brute_force(self):
+        rng = np.random.default_rng(7)
+        n, d = 20, 8
+        Q = rng.normal(size=(n, d)).astype(np.float32)
+        Q = Q / np.linalg.norm(Q, axis=1, keepdims=True)
+        # Two overlapping classes
+        kw_a = np.array([0, 1, 2, 3, 4], dtype=np.int32)
+        kw_b = np.array([3, 4, 5, 6, 7, 8], dtype=np.int32)
+        result = eval_keyword_silhouette(Q, {"a": kw_a, "b": kw_b})
+
+        all_idx = np.arange(n)
+        for entry in result["per_keyword"]:
+            kw = entry["keyword"]
+            idx = kw_a if kw == "a" else kw_b
+            expected_intra, expected_inter = self._brute_force(Q, idx, all_idx)
+            assert abs(entry["intra"] - expected_intra) < 1e-5, f"{kw} intra mismatch"
+            assert abs(entry["inter"] - expected_inter) < 1e-5, f"{kw} inter mismatch"
+
+    def test_skips_singletons(self):
+        rng = np.random.default_rng(11)
+        Q = rng.normal(size=(5, 4)).astype(np.float32)
+        Q = Q / np.linalg.norm(Q, axis=1, keepdims=True)
+        # Class with one member has no intra-pair to score; should be skipped.
+        result = eval_keyword_silhouette(
+            Q, {"singleton": np.array([0], dtype=np.int32), "pair": np.array([1, 2], dtype=np.int32)}
+        )
+        keywords = [e["keyword"] for e in result["per_keyword"]]
+        assert "singleton" not in keywords
+        assert "pair" in keywords
+        assert result["summary"]["n_keywords_evaluated"] == 1
+
+    def test_homogeneous_class_has_max_intra(self):
+        # All members of class A point in the same direction → intra cosine = 1.
+        Q = np.zeros((4, 3), dtype=np.float32)
+        Q[0:2] = np.array([1, 0, 0])  # class A, identical
+        Q[2] = np.array([0, 1, 0])  # not in class
+        Q[3] = np.array([0, 0, 1])  # not in class
+        result = eval_keyword_silhouette(Q, {"a": np.array([0, 1], dtype=np.int32)})
+        entry = result["per_keyword"][0]
+        assert abs(entry["intra"] - 1.0) < 1e-5
+        # Inter is mean over (in × out): both cross-products are zero.
+        assert abs(entry["inter"] - 0.0) < 1e-5
+        assert entry["gap"] > 0.99
+
+    def test_weighted_gap_is_size_weighted_mean(self):
+        # Two classes of different sizes with known gaps; verify weighted mean.
+        rng = np.random.default_rng(13)
+        n, d = 30, 6
+        Q = rng.normal(size=(n, d)).astype(np.float32)
+        Q = Q / np.linalg.norm(Q, axis=1, keepdims=True)
+        kw_small = np.array([0, 1], dtype=np.int32)
+        kw_large = np.array(list(range(2, 12)), dtype=np.int32)
+        result = eval_keyword_silhouette(Q, {"small": kw_small, "large": kw_large})
+        per_kw = {e["keyword"]: e for e in result["per_keyword"]}
+        expected_weighted = (2 * per_kw["small"]["gap"] + 10 * per_kw["large"]["gap"]) / 12
+        assert abs(result["summary"]["weighted_gap"] - expected_weighted) < 1e-6
+        # And mean_gap is the unweighted average.
+        expected_mean = (per_kw["small"]["gap"] + per_kw["large"]["gap"]) / 2
+        assert abs(result["summary"]["mean_gap"] - expected_mean) < 1e-6

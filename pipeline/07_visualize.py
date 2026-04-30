@@ -624,7 +624,7 @@ def main() -> None:
         colormap_rawdata=colormap_rawdata,
         colormap_metadata=colormap_metadata,
         title="A Semantic Map of the OEIS",
-        sub_title=f"{len(df)} core integer sequences, mapped by description similarity",
+        sub_title=f"{len(df):,} integer sequences ({SCOPE} scope), mapped by description similarity",
         enable_search=True,
         font_family="IBM Plex Sans",
         custom_css=custom_css,
