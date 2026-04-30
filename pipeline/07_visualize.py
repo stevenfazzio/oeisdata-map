@@ -25,11 +25,11 @@ work at any scope without crashing.
 Design decisions:
 - Marker size: ``sqrt(edit_count)`` linearly scaled to [3, 15] px
   → Fibonacci (max edit_count) is the largest dot
-- Colormaps always include: primary_keyword (derived from OEIS keywords
-  list), log10(edit_count), log10(n_references + 1), plus any Toponymy
-  hierarchy layers (coarsest first).
-- Colormaps conditional on stage 03: math_domain, sequence_type,
-  growth_class, origin_era.
+- Colormap order: Toponymy clusters (auto-default) → math_domain →
+  sequence_type → growth_class → origin_era → author → log10(edit_count)
+  → log10(n_references + 1).
+- The four LLM enums require stage 03; without enrichment the menu
+  collapses to author + the two continuous colormaps.
 - Click handler: opens https://oeis.org/{id} in a new tab.
 """
 
@@ -54,13 +54,8 @@ from config import (
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-# OEIS has many keywords on a single sequence (e.g., core,nice,easy,hard).
-# Collapse each row to ONE primary category via fixed precedence — the
-# earlier entries "win" because they're the most interesting labels.
-_KEYWORD_PRECEDENCE = ("core", "nice", "easy", "hard", "tabl", "cons", "base")
-
 # The 4 stage-03 LLM columns. If any are missing, stage 07 falls back to
-# primary_keyword + continuous colormaps only.
+# author + continuous colormaps only.
 _LLM_COLS = ("math_domain", "sequence_type", "growth_class", "origin_era")
 
 # Author colormap: top N most-prolific contributors in the selected set get
@@ -86,24 +81,6 @@ def _glasbey_mapping(values) -> dict[str, str]:
     unique = sorted({(v if v else "unknown") for v in values})
     palette = glasbey.create_palette(palette_size=len(unique))
     return dict(zip(unique, palette))
-
-
-def _primary_keyword(kws) -> str:
-    """Map a row's keywords list to a single primary label via fixed precedence.
-
-    Returns the highest-precedence keyword present, or "other" if none match.
-    Accepts numpy arrays (from parquet list cols), Python lists, or None.
-    """
-    if kws is None:
-        return "other"
-    try:
-        kw_set = {str(k) for k in kws}
-    except TypeError:
-        return "other"
-    for p in _KEYWORD_PRECEDENCE:
-        if p in kw_set:
-            return p
-    return "other"
 
 
 def _darken_for_text(hex_color: str, threshold: float = 0.72, factor: float = 0.55) -> str:
@@ -182,6 +159,51 @@ def _bucketize_authors(values: np.ndarray, top_n: int = _AUTHOR_TOP_N) -> np.nda
     counts = counts.drop(labels=[""], errors="ignore")
     keep = set(counts.head(top_n).index)
     return np.array([(v if v in keep else _AUTHOR_OTHER_LABEL) for v in values])
+
+
+def _format_keywords(kws) -> str:
+    """Comma-separated keyword list for the hover card.
+
+    Returns "" when the list is missing/empty so the row can collapse via
+    the `:has(.oeis-dim-v:empty)` rule.
+    """
+    if kws is None:
+        return ""
+    try:
+        items = [str(k) for k in kws if k]
+    except TypeError:
+        return ""
+    return ", ".join(items)
+
+
+def _pill_bg(hex_color: str, alpha: float = 0.18) -> str:
+    """Soft-tinted background for the Domain pill: input hex → `rgba(r,g,b,α)`."""
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return f"rgba(90, 90, 90, {alpha})"
+    try:
+        r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return f"rgba(90, 90, 90, {alpha})"
+    return f"rgba({r}, {g}, {b}, {alpha})"
+
+
+def _darken_for_pill(hex_color: str, factor: float = 0.4) -> str:
+    """Darken any category color to legible pill text on a same-hue tinted bg.
+
+    `_darken_for_text` only darkens above a luminance threshold, which leaves
+    mid-luminance hues (e.g. saturated orange) untouched and unreadable on
+    the pill's faded same-hue background. Pills always darken aggressively.
+    """
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return "#3a3a3a"
+    try:
+        r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return "#3a3a3a"
+    r, g, b = (int(round(c * factor)) for c in (r, g, b))
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 # ── Site-nav injection (Visualization ↔ About) ──────────────────────────────
@@ -278,12 +300,7 @@ def main() -> None:
         print("  LLM enum columns present — including full colormap set")
     else:
         missing = [c for c in _LLM_COLS if c not in df.columns]
-        print(f"  LLM enum columns missing ({', '.join(missing)}); falling back to primary_keyword + continuous only")
-
-    # ── primary_keyword derivation (always available) ────────────────────────
-    primary_keyword_vals = np.array([_primary_keyword(kws) for kws in df["keywords"]])
-    pk_counts = pd.Series(primary_keyword_vals).value_counts()
-    print(f"  primary_keyword distribution: {dict(pk_counts)}")
+        print(f"  LLM enum columns missing ({', '.join(missing)}); falling back to author + continuous only")
 
     # ── Hover text + template ────────────────────────────────────────────────
     # DataMapPlot uses `hover_text` as the search index (search_field defaults
@@ -322,9 +339,10 @@ def main() -> None:
     )
 
     # Three-section editorial card: mono header (id + edits/refs) → serif
-    # body (name + optional formula + mono value run) → mono tag footer.
-    # `.oeis-formula:empty` and tag `span:empty` let missing fields collapse
-    # without leaving hollow rows.
+    # body (name + optional formula + mono value run) → mono dim-row footer.
+    # The dim section orders the four LLM enums first (Domain rendered as a
+    # colored pill, the rest as plain text), then Author and Keywords.
+    # `.oeis-dim:has(.oeis-dim-v:empty)` collapses rows with missing values.
     _hover_head = (
         '<div class="oeis-card">'
         '  <div class="oeis-head">'
@@ -341,46 +359,46 @@ def main() -> None:
         '    <div class="oeis-values">{values_preview_str}</div>'
         "  </div>"
     )
-    # Footer is a 2-col grid of <label, value> rows. Each value is colored by
-    # its own colormap's palette (computed once, reused for colormap_metadata
-    # below). `.oeis-dim:has(.oeis-dim-v:empty)` collapses rows with missing
-    # LLM values so we never show a dangling label.
     _author_dim = (
         '    <div class="oeis-dim">'
         '      <span class="oeis-dim-k">Author</span>'
-        '      <span class="oeis-dim-v" style="color:{author_color}">{author}</span>'
+        '      <span class="oeis-dim-v">{author}</span>'
+        "    </div>"
+    )
+    _keywords_dim = (
+        '    <div class="oeis-dim">'
+        '      <span class="oeis-dim-k">Keywords</span>'
+        '      <span class="oeis-dim-v oeis-dim-v-kw">{keywords}</span>'
         "    </div>"
     )
     if has_llm:
         hover_html = (
-            _hover_head + '  <div class="oeis-dims">' + _author_dim + '    <div class="oeis-dim">'
+            _hover_head + '  <div class="oeis-dims">'
+            '    <div class="oeis-dim">'
             '      <span class="oeis-dim-k">Domain</span>'
-            '      <span class="oeis-dim-v" style="color:{math_domain_color}">{math_domain}</span>'
+            '      <span class="oeis-dim-v"><span class="oeis-pill"'
+            '            style="background:{math_domain_bg};color:{math_domain_color}">'
+            "{math_domain}</span></span>"
             "    </div>"
             '    <div class="oeis-dim">'
             '      <span class="oeis-dim-k">Type</span>'
-            '      <span class="oeis-dim-v" style="color:{sequence_type_color}">{sequence_type}</span>'
+            '      <span class="oeis-dim-v">{sequence_type}</span>'
             "    </div>"
             '    <div class="oeis-dim">'
             '      <span class="oeis-dim-k">Growth</span>'
-            '      <span class="oeis-dim-v" style="color:{growth_class_color}">{growth_class}</span>'
+            '      <span class="oeis-dim-v">{growth_class}</span>'
             "    </div>"
-            "  </div>"
+            '    <div class="oeis-dim">'
+            '      <span class="oeis-dim-k">Era</span>'
+            '      <span class="oeis-dim-v">{origin_era}</span>'
+            "    </div>" + _author_dim + _keywords_dim + "  </div>"
             "</div>"
         )
     else:
-        hover_html = (
-            _hover_head + '  <div class="oeis-dims">' + _author_dim + '    <div class="oeis-dim">'
-            '      <span class="oeis-dim-k">Keyword</span>'
-            '      <span class="oeis-dim-v" style="color:{primary_keyword_color}">{primary_keyword}</span>'
-            "    </div>"
-            "  </div>"
-            "</div>"
-        )
+        hover_html = _hover_head + '  <div class="oeis-dims">' + _author_dim + _keywords_dim + "  </div></div>"
 
     # Palette dicts: one per categorical colormap. Reused below when building
-    # colormap_metadata so the tooltip colors are guaranteed to match the map.
-    pk_colors = _glasbey_mapping(primary_keyword_vals)
+    # colormap_metadata so the legend colors match the map dots.
     author_colors = _glasbey_mapping(author_bucketed)
     if has_llm:
         md_vals = df["math_domain"].fillna("unknown").to_numpy()
@@ -392,9 +410,7 @@ def main() -> None:
         gc_colors = _glasbey_mapping(gc_vals)
         oe_colors = _glasbey_mapping(oe_vals)
 
-    def _row_colors(values, palette) -> list[str]:
-        """Look up each row's category → (darkened, if pale) hex for tooltip text."""
-        return [_darken_for_text(palette.get(v or "unknown", "#5a5a5a")) for v in values]
+    keywords_str = [_format_keywords(kws) for kws in df["keywords"]]
 
     extra_data_dict = {
         "id": _esc(df["id"]),
@@ -403,18 +419,20 @@ def main() -> None:
         "values_preview_str": _esc(df["values_preview_str"]),
         "edit_count": df["edit_count"].fillna(0).astype(int).astype(str).tolist(),
         "n_references": df["n_references"].fillna(0).astype(int).astype(str).tolist(),
-        "primary_keyword": _esc(primary_keyword_vals),
-        "primary_keyword_color": _row_colors(primary_keyword_vals, pk_colors),
-        "author": _esc(author_bucketed),
-        "author_color": _row_colors(author_bucketed, author_colors),
+        "author": _esc(author_clean_vals),
+        "keywords": _esc(keywords_str),
     }
     if has_llm:
         extra_data_dict["math_domain"] = _esc(md_vals)
         extra_data_dict["sequence_type"] = _esc(st_vals)
         extra_data_dict["growth_class"] = _esc(gc_vals)
-        extra_data_dict["math_domain_color"] = _row_colors(md_vals, md_colors)
-        extra_data_dict["sequence_type_color"] = _row_colors(st_vals, st_colors)
-        extra_data_dict["growth_class_color"] = _row_colors(gc_vals, gc_colors)
+        extra_data_dict["origin_era"] = _esc(oe_vals)
+        extra_data_dict["math_domain_color"] = [
+            _darken_for_pill(md_colors.get(v or "unknown", "#5a5a5a")) for v in md_vals
+        ]
+        extra_data_dict["math_domain_bg"] = [
+            _pill_bg(md_colors.get(v or "unknown", "#5a5a5a")) for v in md_vals
+        ]
     extra_data = pd.DataFrame(extra_data_dict)
 
     # ── Marker sizes (sqrt of edit_count, normalized to [3, 15]) ─────────────
@@ -425,23 +443,11 @@ def main() -> None:
     log_edits = np.log10(df["edit_count"].fillna(1).clip(lower=1).astype(float)).to_numpy()
     log_refs = np.log10(df["n_references"].fillna(0).astype(float) + 1).to_numpy()
 
-    # primary_keyword is always first (and thus DataMapPlot's default).
-    # Palette dicts were computed above (shared with tooltip colors).
-    colormap_rawdata: list = [primary_keyword_vals, author_bucketed]
-    colormap_metadata: list = [
-        {
-            "field": "primary_keyword",
-            "description": "Primary keyword",
-            "kind": "categorical",
-            "color_mapping": pk_colors,
-        },
-        {
-            "field": "author",
-            "description": "Author",
-            "kind": "categorical",
-            "color_mapping": author_colors,
-        },
-    ]
+    # Order: LLM enums (Domain, Type, Growth, Era) → Author → continuous
+    # (Edits, Refs). Toponymy clusters auto-show as the dropdown's default
+    # via the topic_name_vectors below.
+    colormap_rawdata: list = []
+    colormap_metadata: list = []
 
     if has_llm:
         colormap_rawdata.extend([md_vals, st_vals, gc_vals, oe_vals])
@@ -473,6 +479,16 @@ def main() -> None:
                 },
             ]
         )
+
+    colormap_rawdata.append(author_bucketed)
+    colormap_metadata.append(
+        {
+            "field": "author",
+            "description": "Author",
+            "kind": "categorical",
+            "color_mapping": author_colors,
+        }
+    )
 
     # Continuous colormaps always included (work at any scope).
     colormap_rawdata.extend([log_edits, log_refs])
@@ -605,10 +621,28 @@ def main() -> None:
     .oeis-dim-v {
         font-size: 11px;
         font-weight: 500;
+        color: #3a3a3a;
         letter-spacing: 0.01em;
         align-self: center;
     }
     .oeis-dim-v:empty { display: none; }
+    .oeis-pill {
+        display: inline-block;
+        padding: 1px 9px 2px;
+        margin-left: -9px;
+        border-radius: 10px;
+        font-size: 10.5px;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+        line-height: 1.45;
+    }
+    .oeis-dim-v-kw {
+        color: #6a6a6a;
+        font-size: 10.5px;
+        font-weight: 400;
+        letter-spacing: 0;
+        word-spacing: 0.02em;
+    }
     """
 
     # ── Render ───────────────────────────────────────────────────────────────

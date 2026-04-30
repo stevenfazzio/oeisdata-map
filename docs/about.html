@@ -53,6 +53,20 @@ th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e0e0e0;
 th { font-weight: 500; color: #555; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
 code { font-size: 14px; background: #f0fdfa; color: #134e4a; padding: 2px 6px; border-radius: 3px; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 .note { background: #f8f9fa; border-left: 3px solid #0d9488; padding: 12px 16px; margin: 16px 0; font-size: 14px; color: #333; }
+table.param-table { font-size: 14px; }
+table.param-table td:first-child { font-weight: 500; color: #2c2c2c; white-space: nowrap; }
+table.param-table tr.param-group td { padding: 22px 0 6px; font-size: 12px; font-weight: 600; color: #0d9488; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #0d9488; }
+table.param-table tr.param-group:first-child td { padding-top: 8px; }
+table.param-table tr.param-group + tr td { padding-top: 12px; }
+.prompt-details { margin: 24px 0 16px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa; }
+.prompt-details > summary { padding: 10px 14px; cursor: pointer; font-size: 14px; color: #555; user-select: none; list-style: none; outline: none; }
+.prompt-details > summary::-webkit-details-marker { display: none; }
+.prompt-details > summary::before { content: "\25B8\A0"; color: #888; }
+.prompt-details[open] > summary::before { content: "\25BE\A0"; }
+.prompt-details > summary:hover { color: #0d9488; }
+.prompt-details[open] > summary { border-bottom: 1px solid #e0e0e0; }
+.prompt-block { margin: 0; padding: 14px 16px; background: #fff; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.55; color: #2c2c2c; white-space: pre-wrap; word-break: break-word; max-height: 500px; overflow-y: auto; border-radius: 0 0 6px 6px; }
+.prompt-block code { font-family: inherit; background: transparent; color: inherit; padding: 0; font-size: inherit; }
 .toc { margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid #e0e0e0; }
 .toc ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .toc li { margin: 0; }
@@ -100,6 +114,7 @@ code { font-size: 14px; background: #f0fdfa; color: #134e4a; padding: 2px 6px; b
     <li><a href="#tags">Per-sequence tags</a></li>
     <li><a href="#using-the-visualization">Using the visualization</a></li>
     <li><a href="#field-definitions">What each colormap means</a></li>
+    <li><a href="#parameters">Notable parameters</a></li>
     <li><a href="#limitations">Limitations</a></li>
     <li><a href="#credits">Credits</a></li>
   </ul>
@@ -144,6 +159,7 @@ code { font-size: 14px; background: #f0fdfa; color: #134e4a; padding: 2px 6px; b
 
   <path class="connector" d="M170,110 L80,128"/>
   <path class="connector" d="M230,110 L320,128"/>
+  <path class="connector" d="M200,110 C200,200,215,273,247,273"/>
 
   <rect class="box" x="10" y="130" width="140" height="38"/>
   <text class="box-label" x="80" y="149">LLM Tag (4 axes)</text>
@@ -351,13 +367,148 @@ score = log1p(edit_count)<br>
   (see <a href="#limitations">Limitations</a>).
 </p>
 
+<!-- The prompt block below mirrors SYSTEM_PROMPT in pipeline/enrichment.py. -->
+<!-- Re-export with: uv run python -c "import sys; sys.path.insert(0,'pipeline'); -->
+<!--   from enrichment import SYSTEM_PROMPT; from html import escape; print(escape(SYSTEM_PROMPT))" -->
+<details class="prompt-details">
+  <summary>Show the system prompt used by stage 03</summary>
+  <pre class="prompt-block"><code>&lt;task&gt;
+You classify Online Encyclopedia of Integer Sequences (OEIS) entries into a fixed
+4-field taxonomy. For each sequence in the input, return one classification by
+calling the classify_sequences tool. Use the values preview, name, formula,
+comments, keywords, author, and last-edited year to inform your decision. The
+Author field often carries explicit historical attribution (e.g., a name + year);
+the LastEdited field is a weak hint about OEIS-entry recency, NOT original
+authorship of the mathematical concept. Always pick a single best-fitting enum
+value.
+&lt;/task&gt;
+
+&lt;math-domain&gt;
+Pick the SINGLE most-fitting mathematical area for the sequence:
+- &quot;number_theory&quot; — primes, divisors, totient, modular arithmetic, Diophantine equations,
+  polygonal/figurate numbers (triangular, square, pentagonal, k-gonal, lattice spirals)
+- &quot;combinatorics&quot; — counting, partitions, permutations, lattice paths, set enumeration
+- &quot;algebra&quot; — group/ring/field structure, polynomial sequences, algebraic invariants
+- &quot;analysis&quot; — Taylor coefficients, integral transforms, special functions, decimal expansions
+  of constants, modular forms / theta-eta quotients / q-series / Ramanujan-style power-series
+  coefficients (these are coefficients of meromorphic functions, not &quot;combinatorics&quot;)
+- &quot;geometry&quot; — distances, areas, volumes, lattice points, polytopes, packings, actual
+  geometric objects in space (NOT polygonal numbers — those are number_theory)
+- &quot;graph_theory&quot; — graphs, trees, networks, colorings, matchings, automorphisms
+- &quot;discrete_dynamics&quot; — iterated maps, cellular automata (including row/column/diagonal
+  binary or decimal representations of CA growth), Collatz-like, recurrences over finite state
+- &quot;recreational&quot; — puzzles, magic squares, palindromes, base-dependent curiosities, word play
+- &quot;physics_chemistry&quot; — physical constants, chemical isomer counts, lattice/spin models
+- &quot;computer_science&quot; — algorithm complexity, codes, automata theory, programming-language objects
+  (NOT cellular automata — those are discrete_dynamics)
+- &quot;probability_stochastic&quot; — random walks, branching processes, expected values, occupancy
+- &quot;other&quot; — doesn&#x27;t fit any of the above
+&lt;/math-domain&gt;
+
+&lt;sequence-type&gt;
+What does each term a(n) of the sequence represent?
+- &quot;enumeration&quot; — counts of combinatorial structures parameterized by n (e.g., &quot;number of partitions of n&quot;)
+- &quot;arithmetic_function&quot; — value of a number-theoretic function at n (e.g., d(n), φ(n), σ(n))
+- &quot;recurrence&quot; — defined by a recursive formula in earlier terms (e.g., a(n) = a(n-1) + a(n-2))
+- &quot;closed_form&quot; — defined by an explicit closed-form expression in n
+- &quot;constant_digits&quot; — the n-th digit (or term) of a real-valued constant&#x27;s expansion
+- &quot;table_flattened&quot; — a 2D triangle/table read by antidiagonals or rows (Pascal&#x27;s triangle, Stirling numbers)
+- &quot;characteristic&quot; — 1 if n has property P, else 0 (characteristic function of a set of integers)
+- &quot;ranked_list&quot; — the n-th element of an enumeration of integers with some property (e.g., the n-th prime)
+- &quot;other&quot; — none of the above
+
+Boundary rules:
+- Prefer &quot;enumeration&quot; over &quot;arithmetic_function&quot; if the sequence counts structures, even if it can be written as f(n).
+- Prefer &quot;ranked_list&quot; over &quot;characteristic&quot; for sequences like &quot;the prime numbers&quot; (2, 3, 5, 7, …)
+  where the indexing is over qualifying elements rather than over all integers.
+- Prefer &quot;table_flattened&quot; over &quot;enumeration&quot; for triangular tables like Pascal&#x27;s,
+  even though each row counts something.
+- Pure polynomial closed forms with NO combinatorial interpretation (e.g., &quot;a(n) = 12*n^2 + 1&quot;,
+  &quot;a(n) = n*(6*n+4)&quot;, &quot;a(n) = (9*n^2 - 3*n + 2)/2&quot;) are &quot;closed_form&quot;, NOT &quot;arithmetic_function&quot;
+  (&quot;arithmetic_function&quot; is reserved for well-known number-theoretic functions like d(n), φ(n),
+  σ(n), ω(n), Ω(n)).
+&lt;/sequence-type&gt;
+
+&lt;growth-class&gt;
+How fast does a(n) grow with n? (Look at the values preview AND the formula.)
+- &quot;finite&quot; — sequence has finitely many terms (look for &quot;fini&quot; or &quot;full&quot; in keywords)
+- &quot;bounded&quot; — bounded above; doesn&#x27;t grow (constant sequence, single-digit terms like π&#x27;s expansion)
+- &quot;linear&quot; — grows like cn or cn + d
+- &quot;polynomial&quot; — grows like n^k for some k &gt; 1
+- &quot;exponential&quot; — grows like c · r^n for r &gt; 1 (Fibonacci, 2^n, Catalan ~ 4^n)
+- &quot;factorial_or_faster&quot; — grows like n! or faster (factorials, powers of factorials, Bell numbers)
+- &quot;logarithmic_or_subpoly&quot; — grows slower than any polynomial (the n-th prime ~ n log n is here, NOT polynomial)
+- &quot;oscillating&quot; — does not have a clear monotonic growth (alternating signs, periodic, ±1 patterns)
+- &quot;unknown&quot; — growth rate not determinable from the data given
+
+Boundary rule: for ranked-list sequences (n-th prime, n-th squarefree), classify by how the n-th
+ELEMENT grows, not by how the count of qualifying integers grows. The n-th prime grows ~ n log n,
+which is &quot;logarithmic_or_subpoly&quot; (not &quot;polynomial&quot;).
+&lt;/growth-class&gt;
+
+&lt;origin-era&gt;
+When was the underlying mathematical concept first studied? (NOT when the OEIS entry was created.)
+Use the name, comments, formulas, **Author**, and **LastEdited** year to infer.
+- &quot;classical_pre1900&quot; — known before 1900 (Fibonacci, primes, Catalan, factorials, π digits, Pascal,
+  Euler totient, Bernoulli numbers, polygonal numbers, ancient combinatorial puzzles)
+- &quot;early_20c_1900_1950&quot; — first studied 1900–1950 (Ramanujan partitions, Hardy-Littlewood era,
+  Polya enumeration, Bell numbers, early algebraic combinatorics)
+- &quot;mid_20c_1950_2000&quot; — first studied 1950–2000 (most computer-era sequences, OEIS founding era,
+  Conway&#x27;s recreational sequences, early CA work, modern algorithmic combinatorics)
+- &quot;modern_post2000&quot; — first studied after 2000 (21st-century OEIS contributions, modern combinatorics
+  papers, recent CA enumeration, contemporary number-theoretic experiments)
+- &quot;unknown&quot; — cannot determine
+
+How to use the Author and LastEdited fields:
+- If **Author** contains an explicit year (e.g., &quot;_Wolfdieter Lang_, May 04 2018&quot;), that year is
+  when the OEIS entry was created — a strong upper bound but NOT necessarily the original era.
+  Combine it with the name/comments: if the comments establish pre-1900 pedigree (e.g., &quot;studied
+  by Euler&quot;, &quot;Leonardo of Pisa, 1202&quot;), use the historical era; otherwise the explicit Author year
+  is the best signal we have.
+- If Author is &quot;_N. J. A. Sloane_&quot; with NO year, the entry comes from the OEIS founder&#x27;s seed
+  population and could be any era — fall back to name/comments analysis.
+- LastEdited is the most-recent-edit year, NOT the original authorship date. Use it ONLY as a
+  weak negative signal: a sequence with LastEdited 2020+, no historical pedigree in name/comments,
+  and a modern Author name leans toward modern_post2000 or mid_20c_1950_2000.
+
+Default: if the sequence is named after a pre-1900 mathematician or refers to an ancient object,
+pick &quot;classical_pre1900&quot; regardless of Author/LastEdited dates. For obscure sequences with comments
+referencing modern computer experiments and no clear historical pedigree, prefer &quot;modern_post2000&quot;
+when the Author year is post-2000, else &quot;mid_20c_1950_2000&quot;. When truly uncertain, use &quot;unknown&quot; —
+but try to commit to an era when there is even weak evidence.
+&lt;/origin-era&gt;
+
+&lt;examples&gt;
+A000045 Fibonacci numbers: F(n) = F(n-1) + F(n-2), values 0, 1, 1, 2, 3, 5, 8, 13, 21, …
+→ math_domain=combinatorics, sequence_type=recurrence, growth_class=exponential, origin_era=classical_pre1900
+Reasoning: counts pairs in many bijections; classic two-term recurrence; golden ratio growth; Leonardo of Pisa, 1202.
+
+A000040 The prime numbers: 2, 3, 5, 7, 11, 13, 17, 19, 23, …
+→ math_domain=number_theory, sequence_type=ranked_list,
+  growth_class=logarithmic_or_subpoly, origin_era=classical_pre1900
+Reasoning: number theory&#x27;s foundational object; the n-th prime grows ~ n log n (subpolynomial); studied since Euclid.
+
+A000108 Catalan numbers: 1, 1, 2, 5, 14, 42, 132, 429, …
+→ math_domain=combinatorics, sequence_type=enumeration, growth_class=exponential, origin_era=classical_pre1900
+Reasoning: counts many structures (Dyck paths, binary trees, triangulations); 4^n / n^(3/2) growth; Catalan 1838.
+
+A000796 Decimal expansion of Pi: 3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, …
+→ math_domain=analysis, sequence_type=constant_digits, growth_class=bounded, origin_era=classical_pre1900
+Reasoning: digits of a transcendental constant; bounded between 0 and 9; π is studied since antiquity.
+
+A007318 Pascal&#x27;s triangle read by rows: 1, 1, 1, 1, 2, 1, 1, 3, 3, 1, 1, 4, 6, 4, 1, …
+→ math_domain=combinatorics, sequence_type=table_flattened, growth_class=exponential, origin_era=classical_pre1900
+Reasoning: a flattened triangular table of binomial coefficients; central column ~ 2^n / sqrt(n); Pascal 1654.
+&lt;/examples&gt;</code></pre>
+</details>
+
 <h2 id="using-the-visualization">Using the visualization <a href="#using-the-visualization" class="anchor">#</a></h2>
 <ul>
   <li><strong>Pan and zoom:</strong> click and drag to pan, scroll to zoom.</li>
-  <li><strong>Hover:</strong> see a card with id, edit count, reference count, name, leading formula, first values, author, and the LLM-extracted math domain, sequence type, and growth class.</li>
+  <li><strong>Hover:</strong> see a card with id, edit count, reference count, name, leading formula, first values, the LLM-extracted math domain, sequence type, growth class, and origin era, the author, and the OEIS keywords assigned to the sequence (definitions on the <a href="https://oeis.org/wiki/Keywords">OEIS keyword wiki</a>).</li>
   <li><strong>Click:</strong> opens the sequence on oeis.org in a new tab.</li>
   <li><strong>Search:</strong> find sequences by id (e.g. <code>A000045</code>), name (e.g. <code>Fibonacci</code>), author, or any keyword that appears in the first 400 characters of comments.</li>
-  <li><strong>Colormaps:</strong> the dropdown at lower-left switches the dot coloring between primary keyword, author, the four LLM tag axes, edit count, and reference count.</li>
+  <li><strong>Colormaps:</strong> the dropdown at lower-left switches the dot coloring between Toponymy clusters (default), the four LLM tag axes (math domain, sequence type, growth class, origin era), author, edit count, and reference count.</li>
   <li><strong>Marker size:</strong> bigger dots have higher edit count (a rough proxy for editorial attention). Famous sequences like Fibonacci and the primes are the largest dots on the map.</li>
 </ul>
 
@@ -368,12 +519,8 @@ score = log1p(edit_count)<br>
   </thead>
   <tbody>
     <tr>
-      <td>Primary keyword</td>
-      <td>One label per sequence chosen from its OEIS keyword set by precedence: <code>core</code> &gt; <code>nice</code> &gt; <code>easy</code> &gt; <code>hard</code> &gt; <code>tabl</code> &gt; <code>cons</code> &gt; <code>base</code>, with <code>other</code> as the fallback. Sequences carry many keywords on average; the precedence collapses each row to its highest-signal label so the colormap stays legible.</td>
-    </tr>
-    <tr>
-      <td>Author</td>
-      <td>The primary author of the OEIS entry. Bucketed to the top 10 most-prolific contributors plus "Other" for legibility.</td>
+      <td>Clusters (default)</td>
+      <td>Five hierarchical layers of Toponymy cluster names (8 / 16 / 49 / 173 / 597 unique labels, coarsest first). Cluster labels appear directly on the map and adapt to the current zoom level.</td>
     </tr>
     <tr>
       <td>Math domain (LLM)</td>
@@ -392,6 +539,10 @@ score = log1p(edit_count)<br>
       <td>When the underlying concept was first studied. The model uses the sequence name, comments, and author together; classical-pre1900 wins whenever the sequence is named after a pre-1900 mathematician or refers to an ancient object, regardless of when the OEIS entry was added.</td>
     </tr>
     <tr>
+      <td>Author</td>
+      <td>The primary author of the OEIS entry. Bucketed to the top 10 most-prolific contributors plus "Other" for legibility on the colormap; the hover card always shows the author's full name when it could be parsed from the <code>%A</code> line.</td>
+    </tr>
+    <tr>
       <td>Edit count (log10)</td>
       <td>Base-10 logarithm of the OEIS entry's revision count. Log scale spreads out the long tail.</td>
     </tr>
@@ -399,10 +550,69 @@ score = log1p(edit_count)<br>
       <td>References (log10 + 1)</td>
       <td>Base-10 logarithm of (1 + number of book and paper citations).</td>
     </tr>
-    <tr>
-      <td>Topic layers</td>
-      <td>Five hierarchical layers of cluster names (8 / 16 / 49 / 173 / 597 unique labels, coarsest first). Cluster labels appear directly on the map and adapt to the current zoom level.</td>
-    </tr>
+  </tbody>
+</table>
+
+<p>
+  Each sequence's full OEIS keyword list (<code>core</code>, <code>nice</code>,
+  <code>easy</code>, <code>tabl</code>, <code>mult</code>, <code>nonn</code>,
+  and so on) appears at the bottom of the hover card. Definitions are on the
+  <a href="https://oeis.org/wiki/Keywords">OEIS keyword wiki</a>.
+</p>
+
+<h2 id="parameters">Notable parameters <a href="#parameters" class="anchor">#</a></h2>
+<p>
+  Key configuration values used across the pipeline. Some appear inline in
+  the descriptions above; the table below collects them in one place as the
+  authoritative reference.
+</p>
+<table class="param-table">
+  <thead>
+    <tr><th>Parameter</th><th>Value</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr class="param-group"><td colspan="3">Corpus</td></tr>
+    <tr><td>Source</td><td><code>oeis/oeisdata</code></td><td>Sparse checkout via <code>scripts/sync_seq.sh</code></td></tr>
+    <tr><td>Total sequences upstream</td><td>394,561</td><td>As of April 2026</td></tr>
+    <tr><td>Curated target</td><td>25,000</td><td>The published map</td></tr>
+    <tr><td>Hard-exclude keywords</td><td><code>dead</code>, <code>dupe</code>, <code>uned</code>, <code>dumb</code></td><td>Applied at all scopes</td></tr>
+    <tr><td>Min visible terms</td><td>8</td><td>Sequences with fewer terms are excluded</td></tr>
+    <tr><td>Curated seed</td><td><code>core</code> &cup; <code>nice</code></td><td>~6,900 sequences</td></tr>
+    <tr class="param-group"><td colspan="3">Embedding text budgets (per sequence, stage 04)</td></tr>
+    <tr><td>Name truncation</td><td>300 chars</td><td></td></tr>
+    <tr><td>Comment truncation</td><td>1,500 chars</td><td></td></tr>
+    <tr><td>Formula truncation</td><td>500 chars</td><td></td></tr>
+    <tr><td>Example truncation</td><td>300 chars</td><td></td></tr>
+    <tr><td>Values shown</td><td>15</td><td>Leading numeric terms kept for embedding hint and tooltip</td></tr>
+    <tr class="param-group"><td colspan="3">LLM classification prompt budgets (stage 03)</td></tr>
+    <tr><td>Comment truncation</td><td>800 chars</td><td>Tighter than the embed-side budget; prompt economy</td></tr>
+    <tr><td>Formula truncation</td><td>400 chars</td><td></td></tr>
+    <tr><td>Author truncation</td><td>100 chars</td><td></td></tr>
+    <tr class="param-group"><td colspan="3">LLM classification (stage 03)</td></tr>
+    <tr><td>Model</td><td>Claude Sonnet 4.5</td><td><code>claude-sonnet-4-5</code></td></tr>
+    <tr><td>Batch size</td><td>25 sequences</td><td>Per tool-use call</td></tr>
+    <tr><td>Concurrency</td><td>30</td><td>Async semaphore</td></tr>
+    <tr><td>Max retries</td><td>5</td><td>Exponential backoff on rate-limit and API errors</td></tr>
+    <tr class="param-group"><td colspan="3">Embedding (stage 04)</td></tr>
+    <tr><td>Model</td><td>Cohere <code>embed-v4.0</code></td><td><code>input_type="clustering"</code></td></tr>
+    <tr><td>Dimensions</td><td>512</td><td></td></tr>
+    <tr><td>Batch size</td><td>96</td><td>Cohere API call</td></tr>
+    <tr><td>Content keywords</td><td>excluded from embed text</td><td>So they remain an orthogonal eval signal</td></tr>
+    <tr class="param-group"><td colspan="3">UMAP (stage 05)</td></tr>
+    <tr><td><code>n_neighbors</code></td><td>15</td><td>Local neighborhood size</td></tr>
+    <tr><td><code>min_dist</code></td><td>0.05</td><td>Controls cluster tightness</td></tr>
+    <tr><td>Metric</td><td><code>cosine</code></td><td></td></tr>
+    <tr><td><code>random_state</code></td><td>42</td><td>Reproducibility</td></tr>
+    <tr class="param-group"><td colspan="3">Topic labeling (stage 06)</td></tr>
+    <tr><td>Model</td><td>Claude Sonnet 4.5</td><td>Toponymy <code>AsyncAnthropicNamer</code></td></tr>
+    <tr><td><code>min_clusters</code></td><td>4</td><td>Toponymy clusterer minimum</td></tr>
+    <tr><td>Detail levels</td><td>0.5&ndash;1.0</td><td></td></tr>
+    <tr><td>Object description</td><td>"OEIS integer sequences"</td><td></td></tr>
+    <tr><td>Layers (curated)</td><td>5</td><td>8 / 16 / 49 / 173 / 597 unique labels coarsest&rarr;finest</td></tr>
+    <tr class="param-group"><td colspan="3">Visualization (stage 07)</td></tr>
+    <tr><td>Marker size</td><td>sqrt(edit_count) &rarr; [3, 15] px</td><td>Linear stretch; high-edit sequences are the largest dots</td></tr>
+    <tr><td>Author bucketing</td><td>Top 10 + "Other"</td><td>Top by per-author sequence count</td></tr>
+    <tr><td>Click handler</td><td><code>oeis.org/{id}</code></td><td>Opens in a new tab</td></tr>
   </tbody>
 </table>
 
@@ -419,6 +629,12 @@ score = log1p(edit_count)<br>
 
 <ul>
   <li>
+    <strong>The 25k filter excludes most of the OEIS.</strong> The score
+    over-represents sequences that have attracted editorial attention. A
+    mathematically interesting but sparsely-documented sequence will be
+    excluded; conversely a heavily-edited but niche entry can be included.
+  </li>
+  <li>
     <strong>Cohere is not math-tuned.</strong> The encoder was trained on
     general web and document text. It's good at coarse semantic similarity
     (it can tell that two number-theory entries are about number theory) but
@@ -432,12 +648,6 @@ score = log1p(edit_count)<br>
     the textual rendering of the first ~15 leading terms participates in the
     encoding. The full value lists, b-files, and any numerical structure
     beyond what the prose describes are invisible to the layout.
-  </li>
-  <li>
-    <strong>The 25k filter excludes most of the OEIS.</strong> The score
-    over-represents sequences that have attracted editorial attention. A
-    mathematically interesting but sparsely-documented sequence will be
-    excluded; conversely a heavily-edited but niche entry can be included.
   </li>
   <li>
     <strong>UMAP artifacts.</strong> Projecting 512 dimensions onto 2
