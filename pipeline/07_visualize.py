@@ -202,10 +202,10 @@ _SITE_NAV_HTML = """\
 .site-nav a{color:#333;text-decoration:none;transition:color 0.15s;}
 .site-nav a:hover{color:#0d9488;}
 .site-nav a.active{color:#0d9488;border-bottom:2px solid #0d9488;line-height:42px;}
-/* Push the DataMapPlot title and search box below the nav bar so they don't
-   overlap the translucent strip. The other corners (top-right / bottom-*) are
-   far enough away that they don't need adjustment. */
-.stack.top-left{margin-top:44px;}
+/* Push the DataMapPlot top corners below the nav bar so the title/search
+   (top-left) and the colormap legend (top-right) don't get clipped by the
+   translucent strip. Bottom corners are unaffected. */
+.stack.top-left,.stack.top-right{margin-top:44px;}
 </style>
 <nav class="site-nav">
   <a href="index.html"__VIS_ACTIVE__>Visualization</a>
