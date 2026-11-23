@@ -62,7 +62,7 @@ FILTER_PANEL_HTML = Path(__file__).resolve().parent / "filter_panel.html"
 
 PLAUSIBLE_SNIPPET = (
     "<!-- Privacy-friendly analytics by Plausible -->\n"
-    '<script async src="https://plausible.io/js/pa-7v5A3XLnVN_I4MctSW8vr.js"></script>\n'
+    '<script async src="https://plausible.io/js/pa-dvmKWiL1gpqH63wOvMp-g.js"></script>\n'
     "<script>\n"
     "  window.plausible=window.plausible||function()"
     "{(plausible.q=plausible.q||[]).push(arguments)},"
